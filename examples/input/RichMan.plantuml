@@ -1,0 +1,11 @@
+@startuml
+skin rose
+
+[*] -> FindQuarter
+FindQuarter : quarters
+FindQuarter --> CountQuarter : Get quarter [ quarters < 10 ]\n--\nincr(quarters)
+CountQuarter -> Youpii : [ quarters == 1 ] /
+CountQuarter --> FindQuarter : [ quarters > 1 ] /
+Youpii --> FindQuarter : \n--\nyoupi
+
+@endumls

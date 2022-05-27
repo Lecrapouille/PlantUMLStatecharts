@@ -1,0 +1,13 @@
+@startuml
+skin rose
+
+' FIXME Passer gumballs en constructor + HasQuarter or NoQuarter
+[*] --> NoQuarter : [ gumballs > 0 ]
+[*] --> OutOfGumballs : [ gumballs == 0 ]
+NoQuarter -> HasQuarter : insert quarter
+HasQuarter -> NoQuarter : eject quarter
+HasQuarter --> GumballSold : turn crank / --gumballs
+GumballSold -> NoQuarter : [ gumballs > 0 ]
+GumballSold -> OutOfGumballs : [ gumballs == 0 ]
+
+@enduml

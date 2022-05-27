@@ -1,0 +1,21 @@
+@startuml
+skin rose
+
+[*] --> LKSModeOff
+
+LKSModeOff --> LKSModeOn : btn_LKS\n--\nLED_LKS = Enable
+LKSModeOn --> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable
+LKSModeOn -> DetectLane : detect\n--\nLED_lane = Enable
+
+DetectLane --> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable;\nLED_lane = Disable
+DetectLane -> WaitDetect : not detect\n--\nLED_lane = Disable
+DetectLane --> FollowLane : set\n--\nLED_steering = Enable;\nservoing = Enable
+
+FollowLane --> WaitDetect : not detect\n--\nLED_lane = Disable;\nLED_steering = Disable;\nservoing = Disable
+FollowLane -> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable;\nLED_lane = Disable;\nLED_steering = Disable;\nservoing = Disable
+FollowLane -> DetectLane : cancel\n--\nLED_steering = Disable;\nservoing = Disable
+
+WaitDetect -> DetectLane : detect\n--\nLED_lane = Enable
+WaitDetect -> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable
+
+@enduml
