@@ -26,6 +26,7 @@
 #  define STATE_MACHINE_HPP
 
 #  include <map>
+#  include <queue>
 #  include <cassert>
 #  include <stdlib.h>
 
@@ -203,8 +204,8 @@ public:
     inline void reset()
     {
         m_current_state = m_initial_state;
-        m_nesting_state = STATES_ID::CANNOT_HAPPEN;
-        m_nesting = false;
+        std::queue<STATES_ID> empty;
+        std::swap(m_nesting, empty);
     }
 
     //--------------------------------------------------------------------------
@@ -226,10 +227,10 @@ public:
     //--------------------------------------------------------------------------
     //! \brief Internal transition: jump to the desired state from internal
     //! event. This will call the guard, leaving actions, entering actions ...
-    //! \param[in] new_state the destination state.
+    //! \param[in] to_state the destination state.
     //! \param[in] tr optional transition.
     //--------------------------------------------------------------------------
-    void transition(STATES_ID const new_state, const Transition* tr = nullptr);
+    void transition(STATES_ID const to_state, const Transition* tr = nullptr);
 
 protected:
 
@@ -263,22 +264,19 @@ private:
 
     //! \brief Save the initial state need for restoring initial state.
     STATES_ID m_initial_state;
-    //! \brief Temporary variable saving the next state.
-    STATES_ID m_next_state;
     //! \brief Temporary variable saving the nesting state (needed for internal
     //! event).
-    STATES_ID m_nesting_state = STATES_ID::CANNOT_HAPPEN;
-    //! \brief is the state nested by an internal event.
-    bool m_nesting = false;
+    std::queue<STATES_ID> m_nesting;
 };
 
 //------------------------------------------------------------------------------
 template<class FSM, class STATES_ID>
-void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
+void StateMachine<FSM, STATES_ID>::transition(STATES_ID const to_state,
                                               const Transition* tr)
 {
-    LOGD("[STATE MACHINE] Reacting to event from state %s\n",
+    LOGD("[FSM INTERNALS] Reacting to event from state %s\n",
          stringify(m_current_state));
+    LOGD("queue size: %lu\n", m_nesting.size());
 
 #if defined(THREAD_SAFETY)
     // If try_lock failed it is not important: it just means that we have called
@@ -287,55 +285,57 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
     m_mutex.try_lock();
 #endif
 
-    m_nesting_state = new_state;
+    m_nesting.push(to_state);
 
     // Reaction from internal event (therefore coming from this method called by
     // one of the action functions: memorize and leave the function: it will
     // continue thank to the while loop. This avoids recursion.
-    if (m_nesting)
+    if (m_nesting.size() > 1u)
     {
-        LOGD("[STATE MACHINE] Internal event. Memorize state %s\n",
-             stringify(new_state));
+        LOGD("[FSM INTERNALS] Internal event. Memorize state %s\n",
+             stringify(to_state));
         return ;
     }
 
+    STATES_ID destination_state;
     do
     {
-        m_next_state = m_nesting_state;
-        m_nesting_state = STATES_ID::CANNOT_HAPPEN;
+        // Consum the
+        destination_state = m_nesting.front();
+        m_nesting.pop();
 
         // Forbidden event: kill the system
-        if (m_next_state == STATES_ID::CANNOT_HAPPEN)
+        if (destination_state == STATES_ID::CANNOT_HAPPEN)
         {
-            LOGE("[STATE MACHINE] Forbidden event. Aborting!\n");
+            LOGE("[FSM INTERNALS] Forbidden event. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
         // Do not react to this event
-        else if (m_next_state == STATES_ID::IGNORING_EVENT)
+        else if (destination_state == STATES_ID::IGNORING_EVENT)
         {
-            LOGD("[STATE MACHINE] Ignoring external event\n");
+            LOGD("[FSM INTERNALS] Ignoring external event\n");
             return ;
         }
 
         // Unknown state: kill the system
-        else if (m_next_state >= STATES_ID::MAX_STATES)
+        else if (destination_state >= STATES_ID::MAX_STATES)
         {
-            LOGE("[STATE MACHINE] Unknown state. Aborting!\n");
+            LOGE("[FSM INTERNALS] Unknown state. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
-        // Transition to new new state. Local variable mandatory since state
-        // reactions can modify current state (side effect).
+        // Transition to new new state. Local variables are mandatory since state
+        // reactions can modify current state (side effect) and local variables
+        // prevent this case.
         STATES_ID current_state = m_current_state;
-        m_current_state = m_next_state;
+        m_current_state = destination_state;
 
         // Reaction: call the member function associated to the current state
-        StateMachine<FSM, STATES_ID>::State const& nst = m_states[m_next_state];
+        StateMachine<FSM, STATES_ID>::State const& nst = m_states[destination_state];
         StateMachine<FSM, STATES_ID>::State const& cst = m_states[current_state];
 
         // Call the guard
-        m_nesting = true;
         bool guard_res = (tr->guard == nullptr);
         if (!guard_res)
         {
@@ -344,22 +344,20 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
 
         if (!guard_res)
         {
-            LOGD("[STATE MACHINE] Transition refused by the %s guard. Stay"
-                 " in state %s\n", stringify(new_state), stringify(current_state));
+            LOGD("[FSM INTERNALS] Transition refused by the %s guard. Stay"
+                 " in state %s\n", stringify(to_state), stringify(current_state));
             m_current_state = current_state;
-            m_nesting = false;
-            return ;
         }
         else
         {
             // The guard allowed the transition to the next state
-            LOGD("[STATE MACHINE] Transitioning to new state %s\n",
-                 stringify(new_state));
+            LOGD("[FSM INTERNALS] Transitioning to new state %s\n",
+                 stringify(to_state));
 
             // Transition
             if ((tr != nullptr) && (tr->action != nullptr))
             {
-                LOGD("[STATE MACHINE] Do the action of transition %s -> %s\n",
+                LOGD("[FSM INTERNALS] Do the action of transition %s -> %s\n",
                      stringify(current_state), stringify(tr->destination));
                 (reinterpret_cast<FSM*>(this)->*tr->action)();
             }
@@ -368,18 +366,18 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
             // the "on event" clause happened.
             if (cst.onevent != nullptr)
             {
-                LOGD("[STATE MACHINE] Do the state %s 'on event' action\n",
+                LOGD("[FSM INTERNALS] Do the state %s 'on event' action\n",
                      stringify(current_state));
                 (reinterpret_cast<FSM*>(this)->*cst.onevent)();
                 return ;
             }
 
             // Transitioning to a new state ?
-            else if (current_state != m_next_state)
+            else if (current_state != destination_state)
             {
                 if (cst.leaving != nullptr)
                 {
-                    LOGD("[STATE MACHINE] Do the state %s 'on leaving' action\n",
+                    LOGD("[FSM INTERNALS] Do the state %s 'on leaving' action\n",
                          stringify(current_state));
 
                     // Do reactions when leaving the current state
@@ -388,8 +386,8 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
 
                 if (nst.entering != nullptr)
                 {
-                    LOGD("[STATE MACHINE] Do the state %s 'on entry' action\n",
-                         stringify(new_state));
+                    LOGD("[FSM INTERNALS] Do the state %s 'on entry' action\n",
+                         stringify(to_state));
 
                     // Do reactions when entring into the new state
                     (reinterpret_cast<FSM*>(this)->*nst.entering)();
@@ -397,13 +395,11 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const new_state,
             }
             else
             {
-                LOGD("[STATE MACHINE] Was previously in this mode: no "
+                LOGD("[FSM INTERNALS] Was previously in this mode: no "
                      "actions to perform\n");
             }
         }
-        m_nesting = false;
-    }
-    while (m_nesting_state != STATES_ID::CANNOT_HAPPEN);
+    } while (!m_nesting.empty());
 
 #if defined(THREAD_SAFETY)
     m_mutex.unlock();
