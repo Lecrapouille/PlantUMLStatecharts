@@ -685,7 +685,8 @@ class Parser(object):
         self.fd.write('int main()\n')
         self.fd.write('{\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
-        self.fd.write('    std::cout << "===========================================" << std::endl;\n')
+        self.generate_custom_macro('    // Add here initial variables', '    CUSTOM_' + self.class_name.upper() + '_INIT_UNIT_TEST_VARIABLES')
+        self.fd.write('\n    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
         self.fd.write('    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.initial_state + ');\n')
@@ -750,6 +751,7 @@ class Parser(object):
         self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_MEMBER_FUNCTIONS\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_MEMBER_VARIABLES\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_INIT_UNIT_TEST_VARIABLES\n\n')
         self.fd.write('#endif // ' + guard_name + '\n')
         self.fd.close()
 
