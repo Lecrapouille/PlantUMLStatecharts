@@ -9,7 +9,7 @@
     {}
 
 #  define CUSTOM_RICHMANCONTROLLER_MEMBER_FUNCTIONS \
-    void incr(int& x) { x += 1; }
+    void incr(int& x) { x += 1; printf("Quarters: %d\n", quarters); }
 
 #  define CUSTOM_RICHMANCONTROLLER_MEMBER_VARIABLES \
     int quarters = 0;

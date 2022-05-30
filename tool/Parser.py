@@ -511,7 +511,7 @@ class Parser(object):
             self.generate_method_comment(comment)
             self.fd.write('    ' + str(event) + '\n')
             self.fd.write('    {\n')
-            self.fd.write('        LOGD("[EVENT][%s]\\n", __func__);\n\n')
+            self.fd.write('        LOGD("[EVENT %s]\\n", __func__);\n\n')
             self.fd.write('        static Transitions s_transitions =\n')
             self.fd.write('        {\n')
             for origin, destination in arcs:
@@ -547,7 +547,7 @@ class Parser(object):
                 self.fd.write('    bool onGuardingTransition' + origin + '_' + destination + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        const bool guard = (' + tr.guard + ');\n')
-                self.fd.write('        LOGD("[GUARD][' + origin + ' --> ' + destination + '] result: %s\\n",\n')
+                self.fd.write('        LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
                 self.fd.write('             (guard ? "true" : "false"));\n')
                 self.fd.write('        return guard;\n')
                 self.fd.write('    }\n\n')
@@ -556,7 +556,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + '\n    //! to state ' + destination + '.')
                 self.fd.write('    void onTransitioning' + origin + '_' + destination + '()\n')
                 self.fd.write('    {\n')
-                self.fd.write('        LOGD("[TRANSITION][' + origin + ' --> ' + destination + ']\\n");\n')
+                self.fd.write('        LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
                 self.fd.write('        ' + tr.action + ';\n')
                 self.fd.write('    }\n\n')
 
@@ -573,7 +573,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
                 self.fd.write('    void onEnteringState' + state.name + '()\n')
                 self.fd.write('    {\n')
-                self.fd.write('        LOGD("[ENTERING][State ' + state.name + ']\\n");\n')
+                self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.entering + ';\n')
                 # FIXME self.fd.write('        transition(' + state.name + '::' + xx + ');')
                 self.fd.write('    }\n\n')
@@ -582,7 +582,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
                 self.fd.write('    void onLeavingState' + state.name + '()\n')
                 self.fd.write('    {\n')
-                self.fd.write('        LOGD("[LEAVING][State ' + state.name + ']\\n");\n')
+                self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.leaving + ';\n')
                 self.fd.write('    }\n\n')
 
@@ -590,7 +590,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action on event XXX ' + state.name + '.')
                 self.fd.write('    void onEventState' + state.name + '()\n')
                 self.fd.write('    {\n')
-                self.fd.write('        LOGD("[EVENT][State ' + state.name + ']\\n");\n')
+                self.fd.write('        LOGD("[EVENT STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.event.name + ';\n')
                 self.fd.write('    }\n\n')
 
@@ -675,7 +675,7 @@ class Parser(object):
         self.fd.write('    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.initial_state + ');\n')
         self.fd.write('    assert(strcmp(fsm.c_str(), "' + self.initial_state + '") == 0);\n')
-        self.fd.write('    LOGD("ok");\n\n')
+        self.fd.write('    LOGD("Test: ok\\n");\n\n')
         for cycle in cycles:
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
             self.fd.write('    std::cout << "Cycle:')
@@ -694,10 +694,10 @@ class Parser(object):
                 self.fd.write(';\n')
                 self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
                 self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                self.fd.write('    LOGD("ok");\n\n')
+                self.fd.write('    LOGD("Test: ok\\n");\n\n')
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
-        self.fd.write('    return 0;\n')
+        self.fd.write('    return EXIT_SUCCESS;\n')
         self.fd.write('}\n\n')
 
     ###########################################################################
