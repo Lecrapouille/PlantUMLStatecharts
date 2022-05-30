@@ -499,31 +499,35 @@ class Parser(object):
         self.generate_table_states(states)
         self.generate_custom_macro('\n        // Complete your constructor',
                                    '        CUSTOM_' + self.class_name.upper() + '_CONSTRUCTOR')
+        d = self.graph.nodes['[*]']['data']
+        if d.entering != '':
+            self.fd.write(d.entering)
+            if d.entering[-2] != '}':
+                self.fd.write(';\n')
+        self.fd.write('    }\n\n')
+
+    ###########################################################################
+    ### Code generator: add the state machine reset method.
+    ###########################################################################
+    def generate_reset(self):
+        if self.graph.nodes['[*]']['data'].entering == '':
+            return
+        self.generate_method_comment('Reset the state machine.')
+        self.fd.write('    void reset()\n')
+        self.fd.write('    {\n')
+        self.fd.write('        StateMachine::reset();\n')
+        self.fd.write('        onEnteringInitialState();\n')
         self.fd.write('    }\n\n')
 
     ###########################################################################
     ### Code generator: add all methods associated with external events.
     ###########################################################################
     def generate_external_events(self):
-        no_event, no_arcs = Event(), []
-
-        # Manage external event (public methods)
         for event, arcs in self.events.items():
             if event.name == '':
-                no_event, no_arcs = event, arcs
-            else:
-                self.generate_event(event, arcs, 'External event.')
+                continue
 
-        # Manage arcs without event
-        if no_event != None:
-                self.fd.write('private: // Internal events\n\n')
-                self.generate_event(no_event, no_arcs, 'Internal event.')
-
-    ###########################################################################
-    ### Code generator: add the method assoicated to the event.
-    ###########################################################################
-    def generate_event(self, event, arcs, comment):
-            self.generate_method_comment(comment)
+            self.generate_method_comment('External event.')
             self.fd.write('    ' + event.header() + '\n')
             self.fd.write('    {\n')
             self.fd.write('        LOGD("[EVENT %s]\\n", __func__);\n\n')
@@ -536,7 +540,10 @@ class Parser(object):
                 self.fd.write('                {\n')
                 self.fd.write('                    ' + self.enum_name + '::' + destination + ',\n')
                 if tr.guard != '':
-                    self.fd.write('                    &' + self.class_name + '::onGuardingTransition' + origin + '_' + destination + ',\n')
+                    if origin != '[*]':
+                        self.fd.write('                    &' + self.class_name + '::onGuardingTransition' + origin + '_' + destination + ',\n')
+                    else:
+                        self.fd.write('                    &' + self.class_name + '::onGuardingTransition_' + destination + ',\n')
                 else:
                     self.fd.write('                    nullptr,\n')
                 if tr.action != '':
@@ -559,7 +566,10 @@ class Parser(object):
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
                 self.generate_method_comment('Guard the transition from state ' + origin  + '\n    //! to state ' + destination + '.')
-                self.fd.write('    bool onGuardingTransition' + origin + '_' + destination + '()\n')
+                if origin != '[*]':
+                    self.fd.write('    bool onGuardingTransition' + origin + '_' + destination + '()\n')
+                else:
+                    self.fd.write('    bool onGuardingTransition_' + destination + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        const bool guard = (' + tr.guard + ');\n')
                 self.fd.write('        LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
@@ -586,11 +596,15 @@ class Parser(object):
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
-                self.fd.write('    void onEnteringState' + state.name + '()\n')
+                if state.name != '[*]':
+                    self.fd.write('    void onEnteringState' + state.name + '()\n')
+                else:
+                    self.fd.write('    void onEnteringInitialState()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
-                self.fd.write('        ' + state.entering + ';\n')
-                # FIXME self.fd.write('        transition(' + state.name + '::' + xx + ');')
+                self.fd.write('        ' + state.entering)
+                if state.entering[-2] != '}':
+                    self.fd.write(';\n')
                 self.fd.write('    }\n\n')
 
             if state.leaving != '':
@@ -619,6 +633,7 @@ class Parser(object):
         self.fd.write('{\n')
         self.fd.write('public: // Constructor and external events\n\n')
         self.generate_constructor()
+        self.generate_reset()
         self.generate_external_events()
         self.fd.write('private: // Guards and reactions\n\n')
         self.generate_states_transitions_reactions()
@@ -737,6 +752,7 @@ class Parser(object):
             self.generate_unit_tests(cppfile)
         self.generate_footer(hpp)
         self.fd.close()
+        self.generate_macros(cppfile)
 
     ###########################################################################
     ### Code generator: generate the header file for macros.
@@ -808,22 +824,33 @@ class Parser(object):
         pass
 
     ###########################################################################
-    ### Pour tous les etats qui n'ont pas d'event sur leurs arcs sortants
-    ### on doit leur ajouter un 'onEnteringState' pour appeller noEvent().
-    ### s'ils ont un 'onEnteringState' ajouter noEvent().
+    ###
     ###########################################################################
     def finalize_machine(self):
+        # Make unique the list of states
         states = []
         for s in list(self.graph.nodes()):
             for d in list(self.graph.neighbors(s)):
-                if self.graph[s][d]['data'].event.name == '':
+                tr = self.graph[s][d]['data']
+                if s == '[*]' and tr.event.name == '' and tr.guard != '':
                     states.append(s)
-
-        code = '// Direct transition to next state\n        noEvent()'
+                elif s != '[*]' and tr.event.name == '':
+                    states.append(s)
         states = list(set(states))
+
+        code = ''
         for s in states:
-            if s != '[*]':
-                self.graph.nodes[s]['data'].entering += code
+            if s == '[*]':
+                code = '\n        onEnteringInitialState()'
+            else:
+                code = ''
+                for d in list(self.graph.neighbors(s)):
+                    code += '\n        if (onGuardingTransition' + s + '_' + d + '())\n'
+                    code += '        {\n'
+                    code += '            transition(' + self.enum_name + '::' + d + ');\n'
+                    code += '            return ;\n'
+                    code += '        }\n'
+            self.graph.nodes[s]['data'].entering += code
 
     ###########################################################################
     ### Entry point of the plantUML file parser.
@@ -861,7 +888,6 @@ class Parser(object):
         self.is_state_machine_determinist()
         self.finalize_machine()
         self.generate_code(cppfile)
-        self.generate_macros(cppfile)
 
 ###############################################################################
 ### Entry point.
