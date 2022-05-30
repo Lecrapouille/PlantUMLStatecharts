@@ -56,7 +56,7 @@ class Event(object):
         # List of params
         self.params = []
 
-    def stringify(self):
+    def header(self):
         if self.name == '':
             return 'void noEvent()'
 
@@ -67,6 +67,21 @@ class Event(object):
             params += p.upper() + ' const& ' + p.lower()
         return 'void ' + self.name + '(' + params + ')'
 
+    def caller(self):
+        if self.name == '':
+            return 'noEvent()'
+
+        i = 0
+        params = ''
+        for p in self.params:
+            if params != '':
+                params += ', ' + self.name.lower() + '_x[' + str(i) + ']'
+                i += 1
+            params += p.lower()
+        if params != '' or self.name[-1] != ')':
+            params = '(' + params + ')'
+        return self.name + params
+
     def __hash__(self):
         return hash(self.name)
 
@@ -74,10 +89,10 @@ class Event(object):
         return isinstance(other, Event) and (self.name == other.name)
 
     def __str__(self):
-        return self.stringify()
+        return self.definition()
 
     def __repr__(self):
-        return self.stringify()
+        return self.definition()
 
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML transition.
@@ -509,7 +524,7 @@ class Parser(object):
     ###########################################################################
     def generate_event(self, event, arcs, comment):
             self.generate_method_comment(comment)
-            self.fd.write('    ' + str(event) + '\n')
+            self.fd.write('    ' + event.header() + '\n')
             self.fd.write('    {\n')
             self.fd.write('        LOGD("[EVENT %s]\\n", __func__);\n\n')
             self.fd.write('        static Transitions s_transitions =\n')
@@ -684,17 +699,18 @@ class Parser(object):
             self.fd.write('" << std::endl;\n')
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
             self.fd.write('    fsm.reset();\n')
-            for i in range(0, len(cycle) - 1):
-                arc = self.graph[cycle[i]][cycle[i+1]]
-                event = arc['data'].event.name
-                if event != '':
-                    self.fd.write('    fsm.' + event)
-                    if event[-1] != ')':
-                        self.fd.write('()')
-                self.fd.write(';\n')
-                self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
-                self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                self.fd.write('    LOGD("Test: ok\\n");\n\n')
+            for i in range(len(cycle) - 1):
+                event = self.graph[cycle[i]][cycle[i+1]]['data'].event
+                if event.name != '':
+                    self.fd.write('    fsm.' + event.caller() + ';\n')
+                if (i == len(cycle) - 2):
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                    self.fd.write('    LOGD("Test: ok\\n");\n\n')
+                elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                    self.fd.write('    LOGD("Test: ok\\n");\n\n')
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
         self.fd.write('    return EXIT_SUCCESS;\n')
