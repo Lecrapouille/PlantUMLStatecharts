@@ -705,13 +705,17 @@ class Parser(object):
                 if event.name != '':
                     self.fd.write('    fsm.' + event.caller() + ';\n')
                 if (i == len(cycle) - 2):
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
-                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                    self.fd.write('    LOGD("Test: ok\\n");\n\n')
+                    if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
+                        self.fd.write('    #warning "Malformed state machine"\n\n')
+                    else:
+                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                        self.fd.write('    LOGD("Test: ok\\n");\n\n')
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
-                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                    self.fd.write('    LOGD("Test: ok\\n");\n\n')
+                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                        self.fd.write('    LOGD("Test: ok\\n");\n\n')
+
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
         self.fd.write('    return EXIT_SUCCESS;\n')
