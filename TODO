@@ -1,0 +1,5 @@
+- Motor: setSpeed(x)() + ajouter LOGD + comment passer x dans la guarde ?
+- Motor: IDLE::onentry pas appelee*
+- Motor: Ko car SPIN::on event est appele meme sur halt du coup ne passe pas dans STOP
+- 2 transitions avec evenement pas gérés
+- printf("\\n")

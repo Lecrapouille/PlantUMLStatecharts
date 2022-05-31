@@ -10,6 +10,7 @@ Idle --> Start : setSpeed(x) [ x > 0 ]
 Start --> Stop : halt
 Start -> Spinning : setSpeed(x) [ x > 0 ]
 Stop <- Spinning : halt
+' FIXME not managed: double transition
 ' Stop <- Spinning : setSpeed(x) [ x == 0 ]
 Idle <- Stop
 
