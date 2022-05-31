@@ -695,8 +695,8 @@ class Parser(object):
         self.fd.write('#include <cassert>\n')
         self.fd.write('#include <cstring>\n\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -DFSM_DEBUG ' + os.path.basename(cppfile) + '\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(cppfile))
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG ' + os.path.basename(cppfile) + '\n' +
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(cppfile))
         self.fd.write('int main()\n')
         self.fd.write('{\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
@@ -723,13 +723,15 @@ class Parser(object):
                     if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
                         self.fd.write('    #warning "Malformed state machine"\n\n')
                     else:
+                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
                         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                        self.fd.write('    LOGD("Test: ok\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
+                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
                         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                        self.fd.write('    LOGD("Test: ok\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
 
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')

@@ -268,9 +268,7 @@ private:
 template<class FSM, class STATES_ID>
 void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
 {
-LOGD("j'entre: %lu\n", m_nesting.size());
-    //LOGD("[FSM INTERNALS] Reacting to event from state %s\n",
-    //     stringify(m_current_state));
+//LOGD("j'entre: %lu\n", m_nesting.size());
 
 #if defined(THREAD_SAFETY)
     // If try_lock failed it is not important: it just means that we have called
@@ -287,7 +285,7 @@ LOGD("j'entre: %lu\n", m_nesting.size());
         LOGD("[FSM INTERNALS] Internal event. Memorize state %s\n",
              stringify(tr->destination));
         m_nesting.push(tr);
-LOGD("je sors\n");
+//LOGD("je sors\n");
         return ;
     }
 
@@ -295,7 +293,7 @@ LOGD("je sors\n");
     Transition const* transition;
     do
     {
-        LOGD("do: queue size: %lu\n", m_nesting.size());
+        //LOGD("do: queue size: %lu\n", m_nesting.size());
 
         // Consum the current state
         transition = m_nesting.front();
@@ -397,10 +395,10 @@ LOGD("je sors\n");
         }
 
         m_nesting.pop();
-LOGD("while: queue size: %lu\n", m_nesting.size());
+//LOGD("while: queue size: %lu\n", m_nesting.size());
     } while (!m_nesting.empty());
 
-LOGD("je sors\n");
+//LOGD("je sors\n");
 
 #if defined(THREAD_SAFETY)
     m_mutex.unlock();

@@ -6,10 +6,11 @@ skin rose
 Idle : entry / printf("coucou\\n")
 Idle : exit / printf("bye\\n")
 [*] --> Idle
-Idle --> Start : setSpeed(x) [ x >= 0 ]
+Idle --> Start : setSpeed(x) [ x > 0 ]
 Start --> Stop : halt
-Start -> Spinning : setSpeed(x) [ x >= 0 ]
+Start -> Spinning : setSpeed(x) [ x > 0 ]
 Stop <- Spinning : halt
+' Stop <- Spinning : setSpeed(x) [ x == 0 ]
 Idle <- Stop
 
 Spinning : on setSpeed(x) [ x >= 0 ]
