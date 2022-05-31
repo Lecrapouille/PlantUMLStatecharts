@@ -204,7 +204,7 @@ public:
     inline void reset()
     {
         m_current_state = m_initial_state;
-        std::queue<STATES_ID> empty;
+        std::queue<Transition const*> empty;
         std::swap(m_nesting, empty);
     }
 
@@ -227,30 +227,25 @@ public:
     //--------------------------------------------------------------------------
     //! \brief Internal transition: jump to the desired state from internal
     //! event. This will call the guard, leaving actions, entering actions ...
-    //! \param[in] to_state the destination state.
-    //! \param[in] tr optional transition.
-    //--------------------------------------------------------------------------
-    void transition(STATES_ID const to_state, const Transition* tr = nullptr);
-
-protected:
-
-    //--------------------------------------------------------------------------
-    //! \brief From current state, jump to the destination state from external
-    //! event and given transition.
     //! \param[in] transitions the table of transitions.
     //--------------------------------------------------------------------------
-    void transition(Transitions const& transitions)
+    inline void transition(Transitions const& transitions)
     {
         auto const& it = transitions.find(m_current_state);
         if (it != transitions.end())
         {
-            transition(it->second.destination, &(it->second));
+            transition(&it->second);
         }
         else
         {
-            transition(STATES_ID::IGNORING_EVENT, nullptr);
+            LOGE("[FSM INTERNALS] Unknow transition. Aborting!\n");
+            exit(EXIT_FAILURE);
         }
     }
+
+protected:
+
+    void transition(Transition const* transition);
 
 protected:
 
@@ -266,17 +261,16 @@ private:
     STATES_ID m_initial_state;
     //! \brief Temporary variable saving the nesting state (needed for internal
     //! event).
-    std::queue<STATES_ID> m_nesting;
+    std::queue<Transition const*> m_nesting;
 };
 
 //------------------------------------------------------------------------------
 template<class FSM, class STATES_ID>
-void StateMachine<FSM, STATES_ID>::transition(STATES_ID const to_state,
-                                              const Transition* tr)
+void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
 {
-    LOGD("[FSM INTERNALS] Reacting to event from state %s\n",
-         stringify(m_current_state));
-    LOGD("queue size: %lu\n", m_nesting.size());
+LOGD("j'entre: %lu\n", m_nesting.size());
+    //LOGD("[FSM INTERNALS] Reacting to event from state %s\n",
+    //     stringify(m_current_state));
 
 #if defined(THREAD_SAFETY)
     // If try_lock failed it is not important: it just means that we have called
@@ -285,100 +279,102 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const to_state,
     m_mutex.try_lock();
 #endif
 
-    m_nesting.push(to_state);
-
     // Reaction from internal event (therefore coming from this method called by
     // one of the action functions: memorize and leave the function: it will
     // continue thank to the while loop. This avoids recursion.
-    if (m_nesting.size() > 1u)
+    if (m_nesting.size())
     {
         LOGD("[FSM INTERNALS] Internal event. Memorize state %s\n",
-             stringify(to_state));
+             stringify(tr->destination));
+        m_nesting.push(tr);
+LOGD("je sors\n");
         return ;
     }
 
-    STATES_ID destination_state;
+    m_nesting.push(tr);
+    Transition const* transition;
     do
     {
-        // Consum the
-        destination_state = m_nesting.front();
-        m_nesting.pop();
+        LOGD("do: queue size: %lu\n", m_nesting.size());
+
+        // Consum the current state
+        transition = m_nesting.front();
+
+        LOGD("[FSM INTERNALS] React to event from state %s\n",
+             stringify(m_current_state));
 
         // Forbidden event: kill the system
-        if (destination_state == STATES_ID::CANNOT_HAPPEN)
+        if (transition->destination == STATES_ID::CANNOT_HAPPEN)
         {
             LOGE("[FSM INTERNALS] Forbidden event. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
         // Do not react to this event
-        else if (destination_state == STATES_ID::IGNORING_EVENT)
+        else if (transition->destination == STATES_ID::IGNORING_EVENT)
         {
             LOGD("[FSM INTERNALS] Ignoring external event\n");
             return ;
         }
 
         // Unknown state: kill the system
-        else if (destination_state >= STATES_ID::MAX_STATES)
+        else if (transition->destination >= STATES_ID::MAX_STATES)
         {
             LOGE("[FSM INTERNALS] Unknown state. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
-        // Transition to new new state. Local variables are mandatory since state
-        // reactions can modify current state (side effect) and local variables
-        // prevent this case.
-        STATES_ID current_state = m_current_state;
-        m_current_state = destination_state;
-
         // Reaction: call the member function associated to the current state
-        StateMachine<FSM, STATES_ID>::State const& nst = m_states[destination_state];
-        StateMachine<FSM, STATES_ID>::State const& cst = m_states[current_state];
+        StateMachine<FSM, STATES_ID>::State const& cst = m_states[m_current_state];
+        StateMachine<FSM, STATES_ID>::State const& nst = m_states[transition->destination];
 
         // Call the guard
-        bool guard_res = (tr->guard == nullptr);
+        bool guard_res = (transition->guard == nullptr);
         if (!guard_res)
         {
-            guard_res = (reinterpret_cast<FSM*>(this)->*tr->guard)();
+            LOGD("[FSM INTERNALS] Call the guard %s -> %s\n",
+                 stringify(m_current_state), stringify(transition->destination));
+            guard_res = (reinterpret_cast<FSM*>(this)->*transition->guard)();
         }
 
         if (!guard_res)
         {
             LOGD("[FSM INTERNALS] Transition refused by the %s guard. Stay"
-                 " in state %s\n", stringify(to_state), stringify(current_state));
-            m_current_state = current_state;
+                 " in state %s\n", stringify(transition->destination),
+                 stringify(m_current_state));
         }
         else
         {
             // The guard allowed the transition to the next state
             LOGD("[FSM INTERNALS] Transitioning to new state %s\n",
-                 stringify(to_state));
+                 stringify(transition->destination));
 
             // Transition
-            if ((tr != nullptr) && (tr->action != nullptr))
+            STATES_ID previous_state = m_current_state;
+            m_current_state = transition->destination;
+            if (transition->action != nullptr)
             {
-                LOGD("[FSM INTERNALS] Do the action of transition %s -> %s\n",
-                     stringify(current_state), stringify(tr->destination));
-                (reinterpret_cast<FSM*>(this)->*tr->action)();
+                LOGD("[FSM INTERNALS] Call the transition %s -> %s action\n",
+                     stringify(previous_state), stringify(transition->destination));
+                (reinterpret_cast<FSM*>(this)->*transition->action)();
             }
 
             // Entry and leaving actions are not made if the event specified by
             // the "on event" clause happened.
             if (cst.onevent != nullptr)
             {
-                LOGD("[FSM INTERNALS] Do the state %s 'on event' action\n",
-                     stringify(current_state));
+                LOGD("[FSM INTERNALS] Call the state %s 'on event' action\n",
+                     stringify(previous_state));
                 (reinterpret_cast<FSM*>(this)->*cst.onevent)();
-                return ;
             }
 
             // Transitioning to a new state ?
-            else if (current_state != destination_state)
+            else if (previous_state != transition->destination)
             {
                 if (cst.leaving != nullptr)
                 {
-                    LOGD("[FSM INTERNALS] Do the state %s 'on leaving' action\n",
-                         stringify(current_state));
+                    LOGD("[FSM INTERNALS] Call the state %s 'on leaving' action\n",
+                         stringify(previous_state));
 
                     // Do reactions when leaving the current state
                     (reinterpret_cast<FSM*>(this)->*cst.leaving)();
@@ -386,8 +382,8 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const to_state,
 
                 if (nst.entering != nullptr)
                 {
-                    LOGD("[FSM INTERNALS] Do the state %s 'on entry' action\n",
-                         stringify(to_state));
+                    LOGD("[FSM INTERNALS] Call the state %s 'on entry' action\n",
+                         stringify(transition->destination));
 
                     // Do reactions when entring into the new state
                     (reinterpret_cast<FSM*>(this)->*nst.entering)();
@@ -399,7 +395,12 @@ void StateMachine<FSM, STATES_ID>::transition(STATES_ID const to_state,
                      "actions to perform\n");
             }
         }
+
+        m_nesting.pop();
+LOGD("while: queue size: %lu\n", m_nesting.size());
     } while (!m_nesting.empty());
+
+LOGD("je sors\n");
 
 #if defined(THREAD_SAFETY)
     m_mutex.unlock();

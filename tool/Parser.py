@@ -824,10 +824,17 @@ class Parser(object):
         pass
 
     ###########################################################################
-    ###
+    ### Some information parsed by PlantUML can be reorganized.
     ###########################################################################
     def finalize_machine(self):
-        # Make unique the list of states
+        self.manage_noevents()
+
+    ###########################################################################
+    ### Manage transitions without events
+    ###########################################################################
+    def manage_noevents(self):
+        # Make unique the list of states that does not have event on their
+        # outout edges
         states = []
         for s in list(self.graph.nodes()):
             for d in list(self.graph.neighbors(s)):
@@ -838,18 +845,40 @@ class Parser(object):
                     states.append(s)
         states = list(set(states))
 
+        # Generate the code of direct transitions to destiantion states
         code = ''
         for s in states:
-            if s == '[*]':
+            if s == '[*]': # Part of the constructor
                 code = '\n        onEnteringInitialState()'
             else:
-                code = ''
+                count = 0
+                code = '\n        LOGD("[STATE ' + s +  '] Transitioning by internal event\\n");\n'
                 for d in list(self.graph.neighbors(s)):
-                    code += '\n        if (onGuardingTransition' + s + '_' + d + '())\n'
-                    code += '        {\n'
-                    code += '            transition(' + self.enum_name + '::' + d + ');\n'
-                    code += '            return ;\n'
-                    code += '        }\n'
+                    tr = self.graph[s][d]['data']
+                    if tr.guard != '':
+                        code += '        if (onGuardingTransition' + s + '_' + d + '())\n'
+                        code += '        {\n'
+                        code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                        code += '            {\n'
+                        code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
+                        code += '                .guard = &' + self.class_name + '::onGuardingTransition' + s + '_' + d + ',\n'
+                        if tr.action != '':
+                            code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
+                        code += '            };\n'
+                        code += '            transition(&tr);\n'
+                        code += '            return ;\n'
+                        code += '        }\n'
+                    else:
+                        if count == 1:
+                            code += '#warning "Undeterminist State machine"\n'
+                        code += '        static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                        code += '        {\n'
+                        code += '            .destination = ' + self.enum_name + '::' + d + ',\n'
+                        if tr.action != '':
+                            code += '            .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
+                        code += '        };\n'
+                        code += '        transition(&tr)'
+                    count += 1
             self.graph.nodes[s]['data'].entering += code
 
     ###########################################################################
