@@ -424,6 +424,8 @@ class Parser(object):
     ### TODO include or insert custom header like done with flex/bison
     ###########################################################################
     def generate_header(self, hpp):
+        self.fd.write('// This file as been generated the ')
+        self.fd.write(date.today().strftime("%B %d, %Y\n"))
         if hpp:
             self.fd.write('#ifndef ' + name + '_HPP\n')
             self.fd.write('#  define ' + name + '_HPP\n\n')
@@ -442,8 +444,6 @@ class Parser(object):
     def generate_footer(self, hpp):
         if hpp:
             self.fd.write('#endif // ' + self.class_name.upper() + '_HPP')
-        self.fd.write('// This file as been generated the ' +
-            date.today().strftime("%B %d, %Y\n"))
 
     ###########################################################################
     ### Code generator: add the function that stringify states.
