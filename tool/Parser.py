@@ -124,6 +124,8 @@ class State(object):
     def __init__(self, name):
         # State name (upper case).
         self.name = name
+        # Optional C++ comment
+        self.comment = ''
         # Action to perform when entering the state.
         self.entering = ''
         # Action to perform when leaving the state.
@@ -254,6 +256,8 @@ class Parser(object):
             st.entering = ' '.join(self.tokens[4:])
         elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
             st.leaving = ' '.join(self.tokens[4:])
+        elif what == 'comment':
+            st.comment = ' '.join(self.tokens[4:])
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
         # help us on graph theory traversal algorithm (like finding cycles).
@@ -665,7 +669,11 @@ class Parser(object):
         for state in list(self.graph.nodes):
             if state == '[*]':
                 continue
-            self.fd.write('    ' + state + ',\n')
+            self.fd.write('    ' + state + ',')
+            comment = self.graph.nodes[state]['data'].comment
+            if comment != '':
+                self.fd.write(' //!< ' + comment)
+            self.fd.write('\n')
         self.fd.write('    // Mandatory states\n')
         self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
         self.fd.write('};\n\n')

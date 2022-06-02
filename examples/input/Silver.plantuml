@@ -15,10 +15,14 @@ BluetoothDiscoverable <-- BluetoothDisconnected : long SPS press / pairing phone
 BluetoothConnected --> BluetoothDisconnected : phone bluetooth disconnected
 
 
+VehiculeOff : comment / Not available for pairing bluetooth
 VehiculeOff : entry / BLUE_LED_OFF; WHITE_LED_OFF
+BluetoothDiscoverable : comment / Avaialble for pairing or automatic connection or manual connection
 BluetoothDiscoverable : entry / BLUE_LED_BLINKING
+BluetoothConnected : comment / Connected to phone via bluetooth
 BluetoothConnected : entry / BLUE_LED_CONSTANT_GLOW
-BluetoothDisconnected : entry / WHITE_LED_GLOW
 BluetoothConnected : on short SPS press / launch home screen
+BluetoothDisconnected : comment / No bluetooth connected
+BluetoothDisconnected : entry / WHITE_LED_GLOW
 
 @endumls
