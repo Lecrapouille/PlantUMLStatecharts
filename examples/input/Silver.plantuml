@@ -1,0 +1,24 @@
+@startuml
+skin rose
+
+[*] --> VehiculeOff
+
+VehiculeOff --> BluetoothDiscoverable : ignition on acc on
+VehiculeOff <-- BluetoothDiscoverable : ignition off acc off
+VehiculeOff <-- BluetoothDisconnected : ignition off acc off
+
+BluetoothDiscoverable --> BluetoothConnected : pairing successful
+BluetoothDiscoverable <-- BluetoothConnected : long SPS press / pairing phone
+BluetoothDiscoverable --> BluetoothDisconnected : bluetooth failure [ pairing unsuccessful || auto connection failure || 120s lapse ]
+BluetoothDiscoverable <-- BluetoothDisconnected : long SPS press / pairing phone
+
+BluetoothConnected --> BluetoothDisconnected : phone bluetooth disconnected
+
+
+VehiculeOff : entry / BLUE_LED_OFF; WHITE_LED_OFF
+BluetoothDiscoverable : entry / BLUE_LED_BLINKING
+BluetoothConnected : entry / BLUE_LED_CONSTANT_GLOW
+BluetoothDisconnected : entry / WHITE_LED_GLOW
+BluetoothConnected : on short SPS press / launch home screen
+
+@endumls

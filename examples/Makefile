@@ -50,7 +50,7 @@ COMPIL_FLAGS += -Wno-switch-enum -Wno-undef -Wno-unused-parameter   \
 # Project flags
 CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS)
 
-TARGETS = LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
+TARGETS = Silver.cpp LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
 
 .PHONY: all
 all: $(TARGETS)
