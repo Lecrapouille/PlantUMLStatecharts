@@ -26,6 +26,7 @@ from datetime import date
 
 import sys
 import os
+import re
 import networkx as nx
 
 ###############################################################################
@@ -197,7 +198,7 @@ class Parser(object):
     ###########################################################################
     ### Read a single line, tokenize its symbols and store them in a list.
     ###########################################################################
-    def parseline(self):
+    def parse_line(self):
         self.nb_tokens = 0
         # Iterate for each empty line
         while self.nb_tokens == 0:
@@ -206,8 +207,8 @@ class Parser(object):
             if not line:
                 return False
             # Replace substring to be sure to parse correctly (ugly hack)
-            #line = line.replace(':', ' : ')
-            #line = line.replace('/', ' / ')
+            line = line.replace(':', ' : ')
+            line = line.replace('/', ' / ')
             line = line.replace('\\n--\\n', ' / ')
             #line = line.replace('[', ' [ ')
             #line = line.replace(']', ' ] ')
@@ -222,16 +223,26 @@ class Parser(object):
                 self.nb_tokens = 0
                 continue
             # Uncomment to help debuging
-            #print('\n=========\nparseline: ' + line[:-1])
+            #print('\n=========\nparse_line: ' + line[:-1])
             #for t in self.tokens:
             #    print('token: "' + t + '"')
         return True
+
+    ###########################################################################
+    ### Check if the token match for a C/C++ variable name
+    ###########################################################################
+    def assert_valid_C_name(self, token):
+        if token == '[*]':
+            return
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", token):
+            self.parse_error('Invalid C++ name "' + token + '"')
 
     ###########################################################################
     ### Add a state as graph node with its attribute if and only if it does not
     ### belong to this graph structure.
     ###########################################################################
     def add_state(self, name):
+        self.assert_valid_C_name(name)
         if not self.graph.has_node(name):
             self.graph.add_node(name, data = State(name))
 
@@ -241,10 +252,18 @@ class Parser(object):
     ###    State : Exit / action
     ###    State : On event [ guard ] / action
     ###    State : Do / activity
+    ### We also offering some unofficial alternative name:
+    ###    State : Entering / action
+    ###    State : Leaving / action
+    ###    State : Event event [ guard ] / action
+    ###    State : Comment / C++ comment
     ###########################################################################
     def parse_state(self):
-        name = self.tokens[0].upper()
         what = self.tokens[2].lower()
+        name = self.tokens[0].upper()
+
+        # Manage a pathological case:
+        self.assert_valid_C_name(name)
 
         # Create first a node if it does not exist. This is the simplest way
         # preventing smashing previously initialized values.
@@ -261,14 +280,14 @@ class Parser(object):
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
         # help us on graph theory traversal algorithm (like finding cycles).
-        elif what == 'on':
+        elif what in ['on', 'event']:
             self.tokens = [ name, '->', name, ':' ] + self.tokens[3:]
             self.parse_transition(True)
             return
         elif what == 'do':
             self.parse_error('do / activity not yet implemented')
         else:
-            self.parse_error('Bad syntax describing a state')
+            self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
 
     ###########################################################################
     ### Parse a guar
@@ -909,19 +928,21 @@ class Parser(object):
         self.enum_name = classname + 'States'
 
         # PlantUML file shall start by '@startuml'
-        if (not self.parseline()) or (self.tokens[0] != '@startuml'):
+        if (not self.parse_line()) or (self.tokens[0] != '@startuml'):
            self.parse_error('Bad plantuml file: did not find @startuml')
 
         # Since PlantUML instruction by line read a line one by one
-        while self.parseline():
+        while self.parse_line():
             if (self.nb_tokens >= 3) and (self.tokens[1] in ['->', '-->', '<-', '<--']):
                 self.parse_transition()
-            if (self.nb_tokens >= 4) and (self.tokens[1] == ':'):
+            elif (self.nb_tokens >= 4) and (self.tokens[1] == ':'):
                 self.parse_state()
             elif self.tokens[0] == '@enduml':
                 break
             elif self.tokens[0] in ['hide', 'scale', 'skin']:
                 continue
+            else:
+                self.parse_error('Bad line')
 
         self.fd.close()
         self.is_state_machine_determinist()

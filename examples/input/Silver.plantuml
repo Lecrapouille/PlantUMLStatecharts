@@ -25,4 +25,4 @@ BluetoothConnected : on short SPS press / launch home screen
 BluetoothDisconnected : comment / No bluetooth connected
 BluetoothDisconnected : entry / WHITE_LED_GLOW
 
-@endumls
+@enduml

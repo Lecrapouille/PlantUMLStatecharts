@@ -7,4 +7,4 @@ CountQuarter -> Youpii : [ quarters == 1 ] /
 CountQuarter --> FindQuarter : [ quarters > 1 ] /
 Youpii --> FindQuarter : \n--\nyoupi
 
-@endumls
+@enduml
