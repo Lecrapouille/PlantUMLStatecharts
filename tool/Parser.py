@@ -251,9 +251,9 @@ class Parser(object):
         # Update state fields
         st = self.graph.nodes[name]['data']
         if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
-            st.entering = self.tokens[4]
+            st.entering = ' '.join(self.tokens[4:])
         elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
-            st.leaving = self.tokens[4]
+            st.leaving = ' '.join(self.tokens[4:])
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
         # help us on graph theory traversal algorithm (like finding cycles).
