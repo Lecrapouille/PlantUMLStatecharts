@@ -24,7 +24,7 @@
 
 PARSER=../tool/Parser.py
 BUILD = build
-VPATH = $(BUILD) input
+#VPATH = $(BUILD) input
 INCLUDES = -I$(BUILD) -Iinput -I. -I../tool
 
 # Verbosity control
@@ -48,44 +48,44 @@ COMPIL_FLAGS += -Wno-switch-enum -Wno-undef -Wno-unused-parameter   \
   -Wno-old-style-cast -Wno-sign-conversion -Wcast-function-type
 
 # Project flags
-CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS)
+CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS) -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE
 
-TARGETS = Silver.cpp LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
+# State Machine postfix name
+NAME=Controller
 
-.PHONY: all
+# LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
+#TARGETS = Silver
+#TARGETS_PNG = $(TARGETS:=.png)
+
+TARGETS = build/SilverController.png build/SilverControllerTests.cpp build/SilverControllerTests
+
 all: $(TARGETS)
 
-%: %.o
+build/%: build/%Controller.png build/%ControllerTests
+
+build/%ControllerTests: build/%ControllerTests.o
 	@echo "Linking $@"
-	$(Q)cd $(BUILD) && $(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(Q)$(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-%.o: $(BUILD)/%.cpp $(BUILD)/%.d
+build/%ControllerTests.o: build/%ControllerTests.cpp build/%Controller.hpp
 	@echo "Compiling $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $(abspath $<) -o $(abspath $(BUILD)/$@)
-	@$(POSTCOMPILE)
+	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $< -o $@
 
-%.png: %.plantuml
-	@echo "Generating chart $<"
-	$(Q)java -jar $(HOME)/plantuml-1.2022.5.jar $<
-	$(Q)mv input/$@ $(BUILD)
+build/%ControllerTests.cpp: input/%.plantuml $(PARSER)
+	@echo "Generating $@ from $<"
+	$(PARSER) $< hpp Controller
+	$(Q)(cd build && ../$(PARSER) ../$< hpp Controller)
 
-%.cpp: %.plantuml %.png $(PARSER)
-	@echo "Parsing $<"
-	$(Q)$(PARSER) $< $(BUILD)/$@
+build/%Controller.png: input/%.plantuml
+	@echo "Generating $@ from $<"
+	$(Q)cat $< | java -jar $(HOME)/plantuml-1.2022.5.jar -pipe > $@
 
 .PHONY: clean
 clean:
 	@echo "cleaning"
-	$(Q)rm -fr $(BUILD)
+	$(Q)(cd $(BUILD) && rm -fr  $(TARGETS) $(TARGETS_HPP) $(TARGETS_PNG))
 
 # Create the directory before compiling sources
 $(TARGETS): | $(BUILD)
 $(BUILD):
 	@mkdir -p $(BUILD)
-
-# Create the dependency files
-$(BUILD)/%.d: ;
-.PRECIOUS: $(BUILD)/%.d
-
-# Header file dependencies
--include $(patsubst %,$(BUILD)/%.d,$(basename %.o))

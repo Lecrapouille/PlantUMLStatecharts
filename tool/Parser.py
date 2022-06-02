@@ -427,14 +427,16 @@ class Parser(object):
         self.fd.write('// This file as been generated the ')
         self.fd.write(date.today().strftime("%B %d, %Y\n"))
         if hpp:
-            self.fd.write('#ifndef ' + name + '_HPP\n')
-            self.fd.write('#  define ' + name + '_HPP\n\n')
-            self.fd.write('#  include "StateMachine.hpp"\n')
+            self.fd.write('#ifndef ' + self.class_name.upper() + '_HPP\n')
+            self.fd.write('#  define ' + self.class_name.upper() + '_HPP\n\n')
+            self.fd.write('#  include "StateMachine.hpp"\n\n')
+            # FIXME broken indentation
+            self.generate_custom_macro('// Custom header file to implement macros to complete the compilation.',
+                                       '#  include "' + self.class_name + 'Macros.hpp"')
         else:
-            self.fd.write('#include "StateMachine.hpp"\n')
-        self.fd.write('\n')
-        self.generate_custom_macro('// Custom header file to implement macros to complete the compilation.',
-                                   '#  include "' + self.class_name + 'Macros.hpp"')
+            self.fd.write('#include "StateMachine.hpp"\n\n')
+            self.generate_custom_macro('// Custom header file to implement macros to complete the compilation.',
+                                       '#  include "' + self.class_name + 'Macros.hpp"')
         self.fd.write('\n')
 
     ###########################################################################
@@ -701,7 +703,10 @@ class Parser(object):
     ### FIXME Manage guard logic to know where to pass in edges.
     ### FIXME Check if two branches from a parent node are mutually exclusive.
     ###########################################################################
-    def generate_unit_tests(self, cppfile):
+    def generate_unit_tests(self, cxxfile):
+        filename = self.class_name + 'Tests.cpp'
+        path = os.path.join(os.path.dirname(cxxfile), filename)
+        self.fd = open(path, 'w')
         states = list(self.graph.nodes)
 
         # Cycles may not start from initial state, therefore do some permutation
@@ -715,12 +720,15 @@ class Parser(object):
             except Exception as ValueError:
                 continue
 
+        self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
         self.fd.write('#include <cassert>\n')
         self.fd.write('#include <cstring>\n\n')
+        self.generate_custom_macro('// Add here code to prepare unit tests', 'CUSTOM_' + self.class_name.upper() + '_PREPARE_UNIT_TEST')
+        self.fd.write('\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG ' + os.path.basename(cppfile) + '\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(cppfile))
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG ' + os.path.basename(cxxfile) + '\n' +
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(cxxfile))
         self.fd.write('int main()\n')
         self.fd.write('{\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
@@ -761,31 +769,43 @@ class Parser(object):
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
         self.fd.write('    return EXIT_SUCCESS;\n')
         self.fd.write('}\n\n')
+        self.fd.close()
 
     ###########################################################################
-    ### Code generator: entry point generating a C++ file.
+    ### Is the generated file should be a C++ source file or header file ?
     ###########################################################################
-    def generate_code(self, cppfile):
-        filename, extension = os.path.splitext(cppfile)
-        hpp = True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
+    def is_hpp_file(self, file):
+        filename, extension = os.path.splitext(file)
+        return True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
 
-        self.fd = open(cppfile, 'w')
+    ###########################################################################
+    ### Code generator: generate the code of the state machine
+    ###########################################################################
+    def generate_state_machine(self, cxxfile):
+        hpp = self.is_hpp_file(cxxfile)
+        self.fd = open(cxxfile, 'w')
         self.generate_header(hpp)
         self.generate_state_enums()
         self.generate_stringify()
         self.generate_state_machine_class()
-        if not hpp:
-            self.generate_unit_tests(cppfile)
         self.generate_footer(hpp)
         self.fd.close()
-        self.generate_macros(cppfile)
+
+    ###########################################################################
+    ### Code generator: entry point generating C++ files: state machine, tests,
+    ### macros ...
+    ###########################################################################
+    def generate_code(self, cxxfile):
+        self.generate_state_machine(cxxfile)
+        self.generate_unit_tests(cxxfile)
+        self.generate_macros(cxxfile)
 
     ###########################################################################
     ### Code generator: generate the header file for macros.
     ###########################################################################
-    def generate_macros(self, cppfile):
+    def generate_macros(self, cxxfile):
         filename = self.class_name + 'Macros.hpp'
-        path = os.path.join(os.path.dirname(cppfile), filename)
+        path = os.path.join(os.path.dirname(cxxfile), filename)
         if os.path.exists(path):
             return
 
@@ -910,10 +930,10 @@ class Parser(object):
     ###########################################################################
     ### Entry point of the plantUML file parser.
     ### umlfile: path to the plantuml file.
-    ### cppfile: path to the generated C++ file.
+    ### cpp_or_hpp: generated a C++ source file or a C++ header file.
     ### classname: class name of the state machine.
     ###########################################################################
-    def translate(self, umlfile, cppfile, classname):
+    def translate(self, umlfile, cpp_or_hpp, classname):
         if not os.path.isfile(umlfile):
             print('File path {} does not exist. Exiting...'.format(umlfile))
             sys.exit()
@@ -923,6 +943,7 @@ class Parser(object):
         self.name = Path(umlfile).stem
         self.class_name = self.name + classname
         self.enum_name = self.class_name + 'States'
+        cxxfile = self.class_name + '.' + cpp_or_hpp
 
         # PlantUML file shall start by '@startuml'
         if (not self.parse_line()) or (self.tokens[0] != '@startuml'):
@@ -944,7 +965,21 @@ class Parser(object):
         self.fd.close()
         self.is_state_machine_determinist()
         self.finalize_machine()
-        self.generate_code(cppfile)
+        self.generate_code(cxxfile)
+
+###############################################################################
+### Display command line usage
+###############################################################################
+def usage():
+    print('Command line: ' + sys.argv[1] + ' <plantuml file> cpp|hpp [state machine name]')
+    print('Where:')
+    print('   <plantuml file>: the path of a plantuml statechart')
+    print('   "cpp" or "hpp": to choose between generating a C++ source file or a C++ header file')
+    print('   [state machine name]: is an optional name to postfix the name of the state machine class')
+    print('Example:')
+    print('   sys.argv[1] foo.plantuml cpp Bar')
+    print('Will create a FooBar.cpp file with a state machine name FooBar')
+    sys.exit(-1)
 
 ###############################################################################
 ### Entry point.
@@ -955,11 +990,13 @@ class Parser(object):
 def main():
     argc = len(sys.argv)
     if argc < 3:
-        print('Command line: ' + sys.argv[1] + ' <plantuml file> <path generated C++ file> [ state machine name ]')
-        sys.exit(-1)
+        usage()
+    if sys.argv[2] not in ['cpp', 'hpp']:
+        print('Invalid ' + sys.argv[2] + '. Please set instead "cpp" (for generating a C++ source file) or "hpp" (for generating a C++ header file)')
+        usage()
 
     p = Parser()
-    p.translate(sys.argv[1], sys.argv[2], 'Controller' if argc == 3 else sys.argv[3])
+    p.translate(sys.argv[1], sys.argv[2], '' if argc == 3 else sys.argv[3])
 
 if __name__ == '__main__':
     main()

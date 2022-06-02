@@ -9,7 +9,8 @@ VehiculeOff <-- BluetoothDisconnected : ignition off acc off
 
 BluetoothDiscoverable --> BluetoothConnected : pairing successful
 BluetoothDiscoverable <-- BluetoothConnected : long SPS press /  pairing_phone()
-BluetoothDiscoverable --> BluetoothDisconnected : bluetooth failure [ pairing unsuccessful || auto connection failure || 120s lapse ]
+' BluetoothDiscoverable --> BluetoothDisconnected : bluetooth failure [ pairing unsuccessful || auto connection failure || 120s lapse ]
+BluetoothDiscoverable --> BluetoothDisconnected : bluetooth failure
 BluetoothDiscoverable <-- BluetoothDisconnected : long SPS press / pairing_phone()
 
 BluetoothConnected --> BluetoothDisconnected : phone bluetooth disconnected
