@@ -1,3 +1,4 @@
+- Silver on event KO et VehicleOff::Entry pas appeleé
 - Motor: setSpeed(x)() + ajouter LOGD + comment passer x dans la guarde ?
 - Motor: IDLE::onentry pas appelee*
 - Motor: Ko car SPIN::on event est appele meme sur halt du coup ne passe pas dans STOP

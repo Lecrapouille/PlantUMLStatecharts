@@ -187,7 +187,8 @@ class Parser(object):
     ### the error happened.
     ###########################################################################
     def parse_error(self, msg):
-        raise Exception('Failed parsing ' + self.name + ' at line ' + str(self.lines) + ': ' + msg)
+        print(f"{bcolors.FAIL}   Failed parsing " + self.name + " at line " + str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
+        sys.exit(-1)
 
     ###########################################################################
     ### Print an error message and exit
@@ -936,7 +937,7 @@ class Parser(object):
     def translate(self, umlfile, cpp_or_hpp, classname):
         if not os.path.isfile(umlfile):
             print('File path {} does not exist. Exiting...'.format(umlfile))
-            sys.exit()
+            sys.exit(-1)
 
         self.reset()
         self.fd = open(umlfile, 'r')
