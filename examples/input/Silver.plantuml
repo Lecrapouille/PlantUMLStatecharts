@@ -8,21 +8,21 @@ VehiculeOff <-- BluetoothDiscoverable : ignition off acc off
 VehiculeOff <-- BluetoothDisconnected : ignition off acc off
 
 BluetoothDiscoverable --> BluetoothConnected : pairing successful
-BluetoothDiscoverable <-- BluetoothConnected : long SPS press / pairing phone
+BluetoothDiscoverable <-- BluetoothConnected : long SPS press /  pairing_phone()
 BluetoothDiscoverable --> BluetoothDisconnected : bluetooth failure [ pairing unsuccessful || auto connection failure || 120s lapse ]
-BluetoothDiscoverable <-- BluetoothDisconnected : long SPS press / pairing phone
+BluetoothDiscoverable <-- BluetoothDisconnected : long SPS press / pairing_phone()
 
 BluetoothConnected --> BluetoothDisconnected : phone bluetooth disconnected
 
 
 VehiculeOff : comment / Not available for pairing bluetooth
-VehiculeOff : entry / BLUE_LED_OFF; WHITE_LED_OFF
+VehiculeOff : entry / blue_led_off(); white_led_off()
 BluetoothDiscoverable : comment / Avaialble for pairing or automatic connection or manual connection
-BluetoothDiscoverable : entry / BLUE_LED_BLINKING
+BluetoothDiscoverable : entry / blue_led_blinking()
 BluetoothConnected : comment / Connected to phone via bluetooth
-BluetoothConnected : entry / BLUE_LED_CONSTANT_GLOW
-BluetoothConnected : on short SPS press / launch home screen
+BluetoothConnected : entry / blue_led_constant_glow()
+BluetoothConnected : on short SPS press / launch_home_screen()
 BluetoothDisconnected : comment / No bluetooth connected
-BluetoothDisconnected : entry / WHITE_LED_GLOW
+BluetoothDisconnected : entry / white_led_glow()
 
 @enduml

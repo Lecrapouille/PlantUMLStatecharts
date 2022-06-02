@@ -373,10 +373,7 @@ class Parser(object):
 
             # Analyse the following optional plantUML code: "/ action"
             if (i < self.nb_tokens) and (self.tokens[i] == '/'):
-                i, j = i + 1, i + 1
-                while (i < self.nb_tokens) and (self.tokens[i] != ']'):
-                    i += 1
-                tr.action = ' '.join(self.tokens[j:i])
+                tr.action = ' '.join(self.tokens[i+1:])
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
