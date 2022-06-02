@@ -922,7 +922,7 @@ class Parser(object):
         self.fd = open(umlfile, 'r')
         self.name = Path(umlfile).stem
         self.class_name = self.name + classname
-        self.enum_name = classname + 'States'
+        self.enum_name = self.class_name + 'States'
 
         # PlantUML file shall start by '@startuml'
         if (not self.parse_line()) or (self.tokens[0] != '@startuml'):
