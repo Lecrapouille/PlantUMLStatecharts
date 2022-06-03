@@ -668,7 +668,7 @@ class Parser(object):
         self.fd.write('};\n\n')
 
     ###########################################################################
-    ###
+    ### Generate code with its comment inside a #ifdef #endif
     ###########################################################################
     def generate_custom_macro(self, comment, code):
         self.fd.write(comment)
@@ -700,9 +700,10 @@ class Parser(object):
     ###########################################################################
     ### Code generator: Add an example of how using this state machine. It
     ### gets all cycles in the graph and try them. This example can be used as
-    ### partial unit test.
+    ### partial unit test. Not all cases can be generated since I dunno how to
+    ### parse guards to generate range of inputs.
     ### FIXME Manage guard logic to know where to pass in edges.
-    ### FIXME Check if two branches from a parent node are mutually exclusive.
+    ### FIXME Cycles does not make all test case possible
     ###########################################################################
     def generate_unit_tests(self, cxxfile):
         filename = self.class_name + 'Tests.cpp'
@@ -793,16 +794,7 @@ class Parser(object):
         self.fd.close()
 
     ###########################################################################
-    ### Code generator: entry point generating C++ files: state machine, tests,
-    ### macros ...
-    ###########################################################################
-    def generate_code(self, cxxfile):
-        self.generate_state_machine(cxxfile)
-        self.generate_unit_tests(cxxfile)
-        self.generate_macros(cxxfile)
-
-    ###########################################################################
-    ### Code generator: generate the header file for macros.
+    ### Code generator: generate the header file which hold helper macros.
     ###########################################################################
     def generate_macros(self, cxxfile):
         filename = self.class_name + 'Macros.hpp'
@@ -818,9 +810,19 @@ class Parser(object):
         self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_MEMBER_FUNCTIONS\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_MEMBER_VARIABLES\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_PREPARE_UNIT_TEST\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_INIT_UNIT_TEST_VARIABLES\n\n')
         self.fd.write('#endif // ' + guard_name + '\n')
         self.fd.close()
+
+    ###########################################################################
+    ### Code generator: entry point generating C++ files: state machine, tests,
+    ### macros ...
+    ###########################################################################
+    def generate_code(self, cxxfile):
+        self.generate_state_machine(cxxfile)
+        self.generate_unit_tests(cxxfile)
+        self.generate_macros(cxxfile)
 
     ###########################################################################
     ### Count the total number of events which shall be > 1
@@ -838,11 +840,11 @@ class Parser(object):
                      + '\n   For example:' + str)
 
     ###########################################################################
-    ### Verify for each state if transitionings are dereminist.
+    ### Verify for each state if transitions are dereminist.
     ### Case 1: each state having more than 1 transition in where one transition
     ###         does not have event and guard.
     ### Case 2: several transitions and guards does not check all cases (for
-    ###         example the Richman case with init quarters < 0. TODO
+    ###         example the Richman case with init quarters < 0.
     ###########################################################################
     def verify_transition(self):
         # Case 1
@@ -857,13 +859,16 @@ class Parser(object):
                                  ' several possible ways\n   while the way to state ' + d +
                                  ' is always true and therefore will be always a candidate and transition'
                                  ' to other states is\n   non determinist.')
+        # Case 2: TODO
 
     ###########################################################################
-    ### Check if the state machine is determinist or not.
-    ### TODO for each node: are out edges mutually exclusive ?
-    ### TODO all states are reachable ?
-    ### TODO how to analyse guards ? How to use networkx + guards ?
-    ### TODO cycles where all guards are true or no events
+    ### Entry point to check if the state machine is well formed (determinist).
+    ### Do not exit the program or throw exception, just display warning on the
+    ### console.
+    ### TODO for each node: are transitions to output neighbors mutually exclusive ?
+    ### TODO Are all states reachable ?
+    ### TODO how to parse guards to do formal prooves ? Can formal proove be
+    ### used in a networkx graph ?
     ###########################################################################
     def is_state_machine_determinist(self):
         self.verify_number_of_events()
@@ -871,17 +876,27 @@ class Parser(object):
         pass
 
     ###########################################################################
-    ### Some information parsed by PlantUML can be reorganized.
+    ### Entry point of graph reorganization.
+    ### When parsing PlantUML we also create on the fly the graph structure but
+    ### some reorganization on the graph may be needed after the parsing step.
+    ### TBD: we can 'optimize' by suppressing nodes that do not have events but
+    ### we prefer not modifying the graph that the user made in PlantUML. We
+    ### add instead warnings to prevent him.
     ###########################################################################
     def finalize_machine(self):
         self.manage_noevents()
 
     ###########################################################################
-    ### Manage transitions without events
+    ### Manage transitions without events: we name them internal event and the
+    ### transition to the next state is made. Since we cannot offer a public
+    ### method 'no event' to make react the state machine we place the transition
+    ### inside the source state as 'on entry' action. We also suppose that
+    ### the state machine is well formed: meaning no several internal events are
+    ### allowed (non determinist switch condition).
     ###########################################################################
     def manage_noevents(self):
         # Make unique the list of states that does not have event on their
-        # outout edges
+        # output edges
         states = []
         for s in list(self.graph.nodes()):
             for d in list(self.graph.neighbors(s)):
@@ -892,13 +907,13 @@ class Parser(object):
                     states.append(s)
         states = list(set(states))
 
-        # Generate the code of direct transitions to destiantion states
+        # Generate the internal transition in the entry action of the source state
         code = ''
         for s in states:
-            if s == '[*]': # Part of the constructor
+            if s == '[*]': # Will be placed inside the class constructor
                 code = '\n        onEnteringInitialState()'
             else:
-                count = 0
+                count = 0 # count number of ways
                 code = '\n        LOGD("[STATE ' + s +  '] Transitioning by internal event\\n");\n'
                 for d in list(self.graph.neighbors(s)):
                     tr = self.graph[s][d]['data']
@@ -928,11 +943,13 @@ class Parser(object):
                     count += 1
             self.graph.nodes[s]['data'].entering += code
 
+# FIXME finir le cas on entry not called
+
     ###########################################################################
     ### Entry point of the plantUML file parser.
     ### umlfile: path to the plantuml file.
-    ### cpp_or_hpp: generated a C++ source file or a C++ header file.
-    ### classname: class name of the state machine.
+    ### cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
+    ### classname: postfixe name for the state machine name.
     ###########################################################################
     def translate(self, umlfile, cpp_or_hpp, classname):
         if not os.path.isfile(umlfile):
