@@ -24,7 +24,7 @@
 
 PARSER=../tool/Parser.py
 BUILD = build
-#VPATH = $(BUILD) input
+VPATH = $(BUILD) input
 INCLUDES = -I$(BUILD) -Iinput -I. -I../tool
 
 # Verbosity control
@@ -48,44 +48,54 @@ COMPIL_FLAGS += -Wno-switch-enum -Wno-undef -Wno-unused-parameter   \
   -Wno-old-style-cast -Wno-sign-conversion -Wcast-function-type
 
 # Project flags
-CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS) -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE
+CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS)
 
-# State Machine postfix name
-NAME=Controller
+TARGETS = RichMan.cpp
 
-# LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
-#TARGETS = Silver
-#TARGETS_PNG = $(TARGETS:=.png)
+# Gumball.cpp: KO Tu pas generes correctement et boucle inifinie sur reset()
+# LoopError.cpp: KO ne lance pas la boucle infinie qui devrait etre lancee par reset()
+# Erroneous.cpp: OK viens de corriger les transitions
+# Silver.cpp: KO entry du 1er etat pas appelle et on event KO
+# LKS.cpp: KO LED_steering = Disable;\nservoing = Disable; sinon semble OK
+# RichMan.cpp: OK
+# Motor.cpp: OK setspeed(x)() et on event sinon OK
 
-TARGETS = build/SilverController.png build/SilverControllerTests.cpp build/SilverControllerTests
+# Silver.cpp LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
 
+.PHONY: all
 all: $(TARGETS)
 
-build/%: build/%Controller.png build/%ControllerTests
-
-build/%ControllerTests: build/%ControllerTests.o
+%: %.o
 	@echo "Linking $@"
-	$(Q)$(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(Q)cd $(BUILD) && $(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
 
-build/%ControllerTests.o: build/%ControllerTests.cpp build/%Controller.hpp
+%.o: $(BUILD)/%.cpp $(BUILD)/%.d
 	@echo "Compiling $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $< -o $@
+	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $(abspath $<) -o $(abspath $(BUILD)/$@)
+	@$(POSTCOMPILE)
 
-build/%ControllerTests.cpp: input/%.plantuml $(PARSER)
-	@echo "Generating $@ from $<"
-	$(PARSER) $< hpp Controller
-	$(Q)(cd build && ../$(PARSER) ../$< hpp Controller)
+%.png: %.plantuml
+	@echo "Generating chart $<"
+	$(Q)java -jar $(HOME)/plantuml-1.2022.5.jar $<
+	$(Q)mv input/$@ $(BUILD)
 
-build/%Controller.png: input/%.plantuml
-	@echo "Generating $@ from $<"
-	$(Q)cat $< | java -jar $(HOME)/plantuml-1.2022.5.jar -pipe > $@
+%.cpp: %.plantuml %.png $(PARSER)
+	@echo "Parsing $<"
+	$(Q)(cd $(BUILD) && ../$(PARSER) ../$< hpp Controller)
 
 .PHONY: clean
 clean:
 	@echo "cleaning"
-	$(Q)(cd $(BUILD) && rm -fr  $(TARGETS) $(TARGETS_HPP) $(TARGETS_PNG))
+	$(Q)rm -fr $(BUILD)
 
 # Create the directory before compiling sources
 $(TARGETS): | $(BUILD)
 $(BUILD):
 	@mkdir -p $(BUILD)
+
+# Create the dependency files
+$(BUILD)/%.d: ;
+.PRECIOUS: $(BUILD)/%.d
+
+# Header file dependencies
+-include $(patsubst %,$(BUILD)/%.d,$(basename %.o))

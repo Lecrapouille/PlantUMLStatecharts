@@ -14,4 +14,8 @@
    bool LED_steering = false; \
    bool servoing = false;
 
+#  define CUSTOM_LKSCONTROLLER_PREPARE_UNIT_TEST
+
+#  define CUSTOM_LKSCONTROLLER_INIT_UNIT_TEST_VARIABLES
+
 #endif // LKSCONTROLLERMACROS_HPP

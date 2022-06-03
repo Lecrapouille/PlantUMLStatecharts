@@ -285,6 +285,11 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         LOGD("[FSM INTERNALS] Internal event. Memorize state %s\n",
              stringify(tr->destination));
         m_nesting.push(tr);
+        if (m_nesting.size() >= 16u)
+        {
+            LOGE("[FSM INTERNALS] Infinite loop detected. Abort!\n");
+            exit(EXIT_FAILURE);
+        }
 //LOGD("je sors\n");
         return ;
     }
