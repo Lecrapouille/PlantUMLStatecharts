@@ -729,8 +729,7 @@ class Parser(object):
         self.generate_custom_macro('// Add here code to prepare unit tests', 'CUSTOM_' + self.class_name.upper() + '_PREPARE_UNIT_TEST')
         self.fd.write('\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG ' + os.path.basename(cxxfile) + '\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(cxxfile))
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
         self.fd.write('int main()\n')
         self.fd.write('{\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
@@ -989,7 +988,7 @@ class Parser(object):
 ### Display command line usage
 ###############################################################################
 def usage():
-    print('Command line: ' + sys.argv[1] + ' <plantuml file> cpp|hpp [state machine name]')
+    print('Command line: ' + sys.argv[0] + ' <plantuml file> cpp|hpp [state machine name]')
     print('Where:')
     print('   <plantuml file>: the path of a plantuml statechart')
     print('   "cpp" or "hpp": to choose between generating a C++ source file or a C++ header file')
