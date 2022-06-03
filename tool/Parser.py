@@ -754,7 +754,7 @@ class Parser(object):
                     self.fd.write('    fsm.' + event.caller() + ';\n')
                 if (i == len(cycle) - 2):
                     if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
-                        self.fd.write('    #warning "Malformed state machine"\n\n')
+                        self.fd.write('    #warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
                         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
@@ -929,16 +929,25 @@ class Parser(object):
                         code += '            transition(&tr);\n'
                         code += '            return ;\n'
                         code += '        }\n'
-                    else:
+                    elif tr.event.name == '':
+                        # Several destination states possible: not determinist !
+                        # We keep generating and add a C++ compilation warning.
                         if count == 1:
-                            code += '#warning "Undeterminist State machine"\n'
-                        code += '        static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
-                        code += '        {\n'
-                        code += '            .destination = ' + self.enum_name + '::' + d + ',\n'
+                            code += '\n#warning "Badly formed state machine: missing guard here"\n'
+                            code += '        /* MISSING GUARD HERE */ {\n'
+                        else:
+                            code += '        {\n'
+                        code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                        code += '            {\n'
+                        code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
                         if tr.action != '':
-                            code += '            .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
-                        code += '        };\n'
-                        code += '        transition(&tr)'
+                            code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
+                        code += '            };\n'
+                        code += '            transition(&tr);\n'
+                        code += '            return ;\n'
+                        code += '        }\n'
+                    else:
+                        code += '\n#warning "Undeterminist State machine detected switching to state ' + d + '"\n'
                     count += 1
             self.graph.nodes[s]['data'].entering += code
 
