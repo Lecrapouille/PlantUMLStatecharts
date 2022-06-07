@@ -115,11 +115,11 @@ const char* stringify(STATES_ID const state);
 //! \tparam STATES_ID enumerate for giving an unique identifier for each state.
 //! In our example:
 //!   enum StatesID { IDLE = 0, STOPPING, STARTING, SPINNING,
-//!                   IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES };
+//!                   IGNORING_EVENT_, CANNOT_HAPPEN_, MAX_STATES_ };
 //!
 //! The 3 last states are mandatory: in the matrix of the control motor of our
-//! previous example, holes are implicitely IGNORING_EVENT, but the user can
-//! explicitely set to CANNOT_HAPPEN to trap the whole system. Other state enum
+//! previous example, holes are implicitely IGNORING_EVENT_, but the user can
+//! explicitely set to CANNOT_HAPPEN_ to trap the whole system. Other state enum
 //! shall be used to defined the table of states \c m_states which shall be
 //! filled with these enums and pointer functions such as 'on entering' ...
 //!
@@ -170,7 +170,7 @@ public:
     struct Transition
     {
         //! \brief State of destination
-        STATES_ID destination = STATES_ID::IGNORING_EVENT;
+        STATES_ID destination = STATES_ID::IGNORING_EVENT_;
         //! \brief The condition validating the event and therefore preventing
         //! the transition to occur.
         bFuncPtr guard = nullptr;
@@ -181,7 +181,7 @@ public:
 
     //! \brief Define the type of container holding all stated of the state
     //! machine.
-    using States = std::array<State, STATES_ID::MAX_STATES>;
+    using States = std::array<State, STATES_ID::MAX_STATES_>;
     //! \brief Define the type of container holding states transitions. Since
     //! a state machine is generally a sparse matrix we use red-back tree.
     using Transitions = std::map<STATES_ID, Transition>;
@@ -195,7 +195,7 @@ public:
         : m_current_state(initial), m_initial_state(initial)
     {
         // FIXME static_assert not working
-        assert(initial < STATES_ID::MAX_STATES);
+        assert(initial < STATES_ID::MAX_STATES_);
     }
 
     //--------------------------------------------------------------------------
@@ -307,21 +307,21 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
              stringify(m_current_state));
 
         // Forbidden event: kill the system
-        if (transition->destination == STATES_ID::CANNOT_HAPPEN)
+        if (transition->destination == STATES_ID::CANNOT_HAPPEN_)
         {
             LOGE("[FSM INTERNALS] Forbidden event. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
         // Do not react to this event
-        else if (transition->destination == STATES_ID::IGNORING_EVENT)
+        else if (transition->destination == STATES_ID::IGNORING_EVENT_)
         {
             LOGD("[FSM INTERNALS] Ignoring external event\n");
             return ;
         }
 
         // Unknown state: kill the system
-        else if (transition->destination >= STATES_ID::MAX_STATES)
+        else if (transition->destination >= STATES_ID::MAX_STATES_)
         {
             LOGE("[FSM INTERNALS] Unknown state. Aborting!\n");
             exit(EXIT_FAILURE);

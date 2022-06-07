@@ -166,7 +166,9 @@ class Parser(object):
         self.events = defaultdict(list)
         # Store all parsed information from plantUML file as a graph.
         self.graph = nx.DiGraph()
+        # Initial / final states
         self.initial_state = ''
+        self.final_state = ''
 
     ###########################################################################
     ### Reset states
@@ -178,6 +180,7 @@ class Parser(object):
         self.events = defaultdict(list)
         self.graph = nx.DiGraph()
         self.initial_state = ''
+        self.final_state = ''
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
@@ -211,7 +214,7 @@ class Parser(object):
     ### Check if the token match for a C/C++ variable name
     ###########################################################################
     def assert_valid_C_name(self, token):
-        if token == '[*]':
+        if token in ['*', '[*]']:
             return
         if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", token):
             self.parse_error('Invalid C++ name "' + token + '"')
@@ -309,7 +312,7 @@ class Parser(object):
                 self.fd.write(' //!< ' + comment)
             self.fd.write('\n')
         self.fd.write('    // Mandatory states\n')
-        self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
+        self.fd.write('    ' + self.state_name(self.initial_state) + ', IGNORING_EVENT_, CANNOT_HAPPEN_, MAX_STATES_\n')
         self.fd.write('};\n\n')
 
     ###########################################################################
@@ -322,18 +325,27 @@ class Parser(object):
         self.fd.write('    static const char* s_states[] =\n')
         self.fd.write('    {\n')
         for state in list(self.graph.nodes):
-            if state == '[*]':
-                continue
-            self.fd.write('        [' + self.enum_name + '::' + state + '] = "' + state + '",\n')
+            if state != '[*]':
+                self.fd.write('        [' + self.enum_name + '::' + self.state_name(state) + '] = "' + self.state_name(state) + '",\n')
         self.fd.write('    };\n')
         self.fd.write('\n')
         self.fd.write('    return s_states[state];\n')
         self.fd.write('};\n\n')
 
     ###########################################################################
+    ### Convert the state name
+    ###########################################################################
+    def state_name(self, state):
+        if state == '[*]':
+            return 'CONSTRUCTOR_'
+        if state == '*':
+            return 'DESTRUCTOR_'
+        return state
+
+    ###########################################################################
     ### Code generator: add the state machine constructor method.
     ###########################################################################
-    def generate_pointer_function(self, what, state_name):
+    def generate_pointer_function(self, what, state):
         dict = {
                 'guard' : 'onGuardingState',
                 'entering' : 'onEnteringState',
@@ -341,7 +353,7 @@ class Parser(object):
                 'activity' : 'doActivityState',
                 'onevent' : 'onEventState', # FIXME missing onEventXXXState once dealing with multiple events
         }
-        self.fd.write('            .' + what +' = &' + self.class_name + '::' + dict[what] + state_name + ',\n')
+        self.fd.write('            .' + what +' = &' + self.class_name + '::' + dict[what] + self.state_name(state) + ',\n')
 
     ###########################################################################
     ### Code generator: add the state machine constructor method.
@@ -349,9 +361,6 @@ class Parser(object):
     def generate_table_states(self, states):
         empty = True
         for state in states:
-            if state == '[*]':
-                continue
-
             if 'data' not in self.graph.nodes[state]:
                 continue
 
@@ -359,7 +368,7 @@ class Parser(object):
             if (s.entering == '') and (s.leaving == '') and (s.event.name == ''):
                 continue
 
-            self.fd.write('        m_states[' + self.enum_name + '::' + s.name + '] =\n')
+            self.fd.write('        m_states[' + self.enum_name + '::' + self.state_name(s.name) + '] =\n')
             self.fd.write('        {\n')
             if s.entering != '':
                 self.generate_pointer_function('entering', s.name)
@@ -380,27 +389,21 @@ class Parser(object):
     ###########################################################################
     def generate_constructor(self):
         states = list(self.graph.nodes)
-        self.generate_method_comment('Default dummy constructor. Start with state ' + self.initial_state + '.')
-        self.fd.write('    ' + self.class_name + '() : StateMachine(' + self.enum_name + '::' + self.initial_state + ')\n')
+        self.generate_method_comment('Default dummy constructor. Start from initial state and call it actions.')
+        self.fd.write('    ' + self.class_name + '() : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
         self.fd.write('    {\n')
         self.generate_table_states(states)
         self.generate_custom_macro('\n        // Complete your constructor',
                                    '        CUSTOM_' + self.class_name.upper() + '_CONSTRUCTOR')
-        d = self.graph.nodes['[*]']['data']
-        if d.entering != '':
-            self.fd.write(d.entering)
-            if d.entering[-2] != '}':
-                self.fd.write(';\n')
+        self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
         self.fd.write('    }\n\n')
 
     ###########################################################################
     ### Code generator: add the state machine reset method.
     ###########################################################################
     def generate_reset(self):
-        if self.graph.nodes['[*]']['data'].entering == '':
-            return
         self.generate_method_comment('Reset the state machine.')
-        self.fd.write('    void start()\n')
+        self.fd.write('    void reset()\n')
         self.fd.write('    {\n')
         self.fd.write('        StateMachine::reset();\n')
         self.fd.write('        onEnteringInitialState();\n')
@@ -427,14 +430,13 @@ class Parser(object):
                 self.fd.write('                {\n')
                 self.fd.write('                    ' + self.enum_name + '::' + destination + ',\n')
                 if tr.guard != '':
-                    if origin != '[*]':
-                        self.fd.write('                    &' + self.class_name + '::onGuardingTransition' + origin + '_' + destination + ',\n')
-                    else:
-                        self.fd.write('                    &' + self.class_name + '::onGuardingTransition_' + destination + ',\n')
+                    self.fd.write('                    &' + self.class_name + '::onGuardingTransition')
+                    self.fd.write(self.state_name(origin) + '_' + self.state_name(destination) + ',\n')
                 else:
                     self.fd.write('                    nullptr,\n')
                 if tr.action != '':
-                    self.fd.write('                    &' + self.class_name + '::onTransitioning' + origin + '_' + destination + ',\n')
+                    self.fd.write('                    &' + self.class_name + '::onTransitioning')
+                    self.fd.write(self.state_name(origin) + '_' + self.state_name(destination) + ',\n')
                 else:
                     self.fd.write('                    nullptr,\n')
                 self.fd.write('                },\n')
@@ -453,10 +455,7 @@ class Parser(object):
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
                 self.generate_method_comment('Guard the transition from state ' + origin  + '\n    //! to state ' + destination + '.')
-                if origin != '[*]':
-                    self.fd.write('    bool onGuardingTransition' + origin + '_' + destination + '()\n')
-                else:
-                    self.fd.write('    bool onGuardingTransition_' + destination + '()\n')
+                self.fd.write('    bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        const bool guard = (' + tr.guard + ');\n')
                 self.fd.write('        LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
@@ -466,7 +465,7 @@ class Parser(object):
 
             if tr.action != '':
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + '\n    //! to state ' + destination + '.')
-                self.fd.write('    void onTransitioning' + origin + '_' + destination + '()\n')
+                self.fd.write('    void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
                 self.fd.write('        ' + tr.action + ';\n')
@@ -483,10 +482,7 @@ class Parser(object):
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
-                if state.name != '[*]':
-                    self.fd.write('    void onEnteringState' + state.name + '()\n')
-                else:
-                    self.fd.write('    void onEnteringInitialState()\n')
+                self.fd.write('    void onEnteringState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.entering)
@@ -496,7 +492,7 @@ class Parser(object):
 
             if state.leaving != '':
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
-                self.fd.write('    void onLeavingState' + state.name + '()\n')
+                self.fd.write('    void onLeavingState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.leaving + ';\n')
@@ -504,7 +500,7 @@ class Parser(object):
 
             if state.event.name != '':
                 self.generate_method_comment('Do the action on event XXX ' + state.name + '.')
-                self.fd.write('    void onEventState' + state.name + '()\n')
+                self.fd.write('    void onEventState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[EVENT STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.event.name + ';\n')
@@ -604,8 +600,8 @@ class Parser(object):
         self.fd.write('\n    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
         self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.initial_state + ');\n')
-        self.fd.write('    assert(strcmp(fsm.c_str(), "' + self.initial_state + '") == 0);\n')
+        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(self.initial_state) + ');\n')
+        self.fd.write('    assert(strcmp(fsm.c_str(), "' + self.state_name(self.initial_state) + '") == 0);\n')
         self.fd.write('    LOGD("Test: ok\\n");\n\n')
         for cycle in cycles:
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
@@ -676,63 +672,54 @@ class Parser(object):
         for s in list(self.graph.nodes()):
             for d in list(self.graph.neighbors(s)):
                 tr = self.graph[s][d]['data']
-                if s == '[*]' and tr.event.name == '' and tr.guard != '':
+                if tr.event.name == '':
                     states.append(s)
-                elif s != '[*]' and tr.event.name == '':
-                    states.append(s)
-
-        # Check if destination state from [*] state has entry action
-        #for neighbor in list(self.graph.neighbors('[*]')):
-        #    if self.graph.nodes[neighbor]['data'].entering != '':
-        #        states.append('[*]')
-        #        break
 
         states = list(set(states))
 
         # Generate the internal transition in the entry action of the source state
         code = ''
-        for s in states:
-            if s == '[*]': # Will be placed inside the class constructor
-                code = '\n        onEnteringInitialState()'
-            else:
-                count = 0 # count number of ways
-                code = '\n        LOGD("[STATE ' + s +  '] Transitioning by internal event\\n");\n'
-                for d in list(self.graph.neighbors(s)):
-                    tr = self.graph[s][d]['data']
-                    if tr.guard != '':
-                        code += '        if (onGuardingTransition' + s + '_' + d + '())\n'
-                        code += '        {\n'
-                        code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
-                        code += '            {\n'
-                        code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
-                        code += '                .guard = &' + self.class_name + '::onGuardingTransition' + s + '_' + d + ',\n'
-                        if tr.action != '':
-                            code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
-                        code += '            };\n'
-                        code += '            transition(&tr);\n'
-                        code += '            return ;\n'
-                        code += '        }\n'
-                    elif tr.event.name == '':
-                        # Several destination states possible: not determinist !
-                        # We keep generating and add a C++ compilation warning.
-                        if count == 1:
-                            code += '\n#warning "Badly formed state machine: missing guard here"\n'
-                            code += '        /* MISSING GUARD HERE */ {\n'
-                        else:
-                            code += '        {\n'
-                        code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
-                        code += '            {\n'
-                        code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
-                        if tr.action != '':
-                            code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
-                        code += '            };\n'
-                        code += '            transition(&tr);\n'
-                        code += '            return ;\n'
-                        code += '        }\n'
+        for state in states:
+            count = 0 # count number of ways
+            code = '\n        LOGD("[STATE ' + state +  '] Transitioning by internal event\\n");\n'
+            for dest in list(self.graph.neighbors(state)):
+                tr = self.graph[state][dest]['data']
+                s = self.state_name(state)
+                d = self.state_name(dest)
+                if tr.guard != '':
+                    code += '        if (onGuardingTransition' + s + '_' + d + '())\n'
+                    code += '        {\n'
+                    code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                    code += '            {\n'
+                    code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
+                    code += '                .guard = &' + self.class_name + '::onGuardingTransition' + s + '_' + d + ',\n'
+                    if tr.action != '':
+                        code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
+                    code += '            };\n'
+                    code += '            transition(&tr);\n'
+                    code += '            return ;\n'
+                    code += '        }\n'
+                elif tr.event.name == '':
+                    # Several destination states possible: not determinist !
+                    # We keep generating and add a C++ compilation warning.
+                    if count == 1:
+                        code += '\n#warning "Badly formed state machine: missing guard here"\n'
+                        code += '        /* MISSING GUARD HERE */ {\n'
                     else:
-                        code += '\n#warning "Undeterminist State machine detected switching to state ' + d + '"\n'
-                    count += 1
-            self.graph.nodes[s]['data'].entering += code
+                        code += '        {\n'
+                    code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                    code += '            {\n'
+                    code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
+                    if tr.action != '':
+                        code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
+                    code += '            };\n'
+                    code += '            transition(&tr);\n'
+                    code += '            return ;\n'
+                    code += '        }\n'
+                else:
+                    code += '\n#warning "Undeterminist State machine detected switching to state ' + d + '"\n'
+                count += 1
+            self.graph.nodes[state]['data'].entering += code
 
     ###########################################################################
     ### The state machine shall have an initial state.
@@ -851,7 +838,9 @@ class Parser(object):
 
         # Initial/final states
         if tr.origin == '[*]':
-            self.initial_state = tr.destination
+            self.initial_state = '[*]'
+        elif tr.destination == '[*]':
+            self.final_state = '*'
 
         # Analyse the following optional plantUML code: ": event ..."
         if (self.nb_tokens > 3) and (self.tokens[3] == ':'):
