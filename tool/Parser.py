@@ -24,7 +24,7 @@ from collections import defaultdict
 from collections import deque
 from datetime import date
 
-import sys, os, re
+import sys, os, re, itertools
 import networkx as nx
 
 ###############################################################################
@@ -233,6 +233,47 @@ class Parser(object):
     ###########################################################################
     def add_transition(self, tr):
         self.graph.add_edge(tr.origin, tr.destination, data=tr)
+
+    ###########################################################################
+    ### Return cycles in the graph.
+    ### Cycles may not start from initial state, therefore do some permutation
+    ### to be sure to start by the initial state.
+    ###########################################################################
+    def graph_cycles(self):
+        # Cycles may not start from initial state, therefore do some permutation
+        # to be sure to start by the initial state.
+        cycles = []
+        for cycle in list(nx.simple_cycles(self.graph)):
+            index = -1
+            # Initial state may have several transitions so search the first
+            for n in self.graph.neighbors(self.initial_state):
+                try:
+                    index = cycle.index(n)
+                    break
+                except Exception as ValueError:
+                    continue
+            if index != -1:
+                cycles.append(cycle[index:] + cycle[:index])
+                cycles[-1].append(cycles[-1][0])
+        return cycles
+
+    ###########################################################################
+    ### Iterate over edges in a depth-first-search (DFS).
+    ###########################################################################
+    def graph_dfs(self):
+         return list(nx.dfs_edges(self.graph, source=self.initial_state))
+
+    ###########################################################################
+    ### Get all paths from all sources to sinks 
+    ###########################################################################
+    def graph_all_paths_to_sinks(self):
+         all_paths = []
+         sink_nodes = [node for node, outdegree in self.graph.out_degree(self.graph.nodes()) if outdegree == 0]
+         source_nodes = [node for node, indegree in self.graph.in_degree(self.graph.nodes()) if indegree == 0]
+         for (source, sink) in [(source, sink) for sink in sink_nodes for source in source_nodes]:
+             for path in nx.all_simple_paths(self.graph, source=source, target=sink):
+                all_paths.append(path)
+         return all_paths
 
     ###########################################################################
     ### Code generator: add a separator line for function.
@@ -558,47 +599,26 @@ class Parser(object):
         self.fd.close()
 
     ###########################################################################
-    ### Code generator: Add an example of how using this state machine. It
-    ### gets all cycles in the graph and try them. This example can be used as
-    ### partial unit test. Not all cases can be generated since I dunno how to
-    ### parse guards to generate range of inputs.
-    ### FIXME Manage guard logic to know where to pass in edges.
-    ### FIXME Cycles does not make all test case possible
+    ### Generate the header for the unit test file
     ###########################################################################
-    def generate_unit_tests(self, cxxfile):
-        filename = self.class_name + 'Tests.cpp'
-        path = os.path.join(os.path.dirname(cxxfile), filename)
-        self.fd = open(path, 'w')
-        states = list(self.graph.nodes)
-
-        # Cycles may not start from initial state, therefore do some permutation
-        # to be sure to start by the initial state.
-        cycles = []
-        for cycle in list(nx.simple_cycles(self.graph)):
-            index = -1
-            # Initial state may have several transitions so search the first
-            for n in self.graph.neighbors(self.initial_state):
-                try:
-                    index = cycle.index(n)
-                    break
-                except Exception as ValueError:
-                    continue
-            if index != -1:
-                cycles.append(cycle[index:] + cycle[:index])
-                cycles[-1].append(cycles[-1][0])
-
+    def generate_unit_tests_header(self):
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
         self.fd.write('#include <cassert>\n')
         self.fd.write('#include <cstring>\n\n')
-        self.generate_custom_macro('// Add here code to prepare unit tests', 'CUSTOM_' + self.class_name.upper() + '_PREPARE_UNIT_TEST')
-        self.fd.write('\n')
-        self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
-        self.fd.write('int main()\n')
-        self.fd.write('{\n')
+
+    ###########################################################################
+    ### Generate the macro for the unit test file
+    ###########################################################################
+    def generate_unit_tests_macro(self):
         self.generate_custom_macro('    // Add here initial variables', '    CUSTOM_' + self.class_name.upper() + '_INIT_UNIT_TEST_VARIABLES')
-        self.fd.write('\n    std::cout << "===========================================" << std::endl;\n')
+        self.fd.write('\n')
+
+    ###########################################################################
+    ### Generate checks on initial state
+    ###########################################################################
+    def generate_unit_tests_check_initial_state(self):
+        self.fd.write('    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    std::cout << "Check current state" << std::endl;\n')
         self.fd.write('    std::cout << "===========================================" << std::endl;\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n')
@@ -613,12 +633,16 @@ class Parser(object):
         for n in neighbors[1:]:
             self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
         self.fd.write(');\n')
-
-
         self.fd.write('    LOGD("Test: ok\\n");\n\n')
+
+    ###########################################################################
+    ### Generate checks on all cycles
+    ###########################################################################
+    def generate_unit_tests_check_cycles(self):
+        cycles = self.graph_cycles()
         for cycle in cycles:
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    std::cout << "Check cycle:')
+            self.fd.write('    std::cout << "Check cycle: [*]')
             for c in cycle:
                 self.fd.write(' ' + c)
             self.fd.write('" << std::endl;\n')
@@ -645,15 +669,80 @@ class Parser(object):
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
                         self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
-                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
 
+    ###########################################################################
+    ### Generate checks on pathes to all sinks
+    ###########################################################################
+    def generate_unit_tests_pathes_to_sinks(self):
+        pathes = self.graph_all_paths_to_sinks()
+        for path in pathes:
+            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
+            self.fd.write('    std::cout << "Check path:')
+            for c in path:
+                self.fd.write(' ' + c)
+            self.fd.write('" << std::endl;\n')
+            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
+            self.fd.write('    fsm.reset();')
+            guard = self.graph[path[0]][path[1]]['data'].guard
+            if guard != '':
+                self.fd.write(' // If ' + guard)
+            self.fd.write('\n')
+            for i in range(len(path) - 1):
+                event = self.graph[path[i]][path[i+1]]['data'].event
+                if event.name != '':
+                    guard = self.graph[path[i]][path[i+1]]['data'].guard
+                    self.fd.write('    fsm.' + event.caller() + ';')
+                    if guard != '':
+                        self.fd.write(' // If ' + guard)
+                    self.fd.write('\n')
+                if (i == len(path) - 2):
+                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + path[i+1] + ');\n')
+                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
+                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + path[i+1] + ');\n')
+                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+
+    ###########################################################################
+    ### Generate the main function doing unit tests
+    ###########################################################################
+    def generate_unit_tests_main_function(self, filename):
+        self.generate_custom_macro('// Add here code to prepare unit tests', 'CUSTOM_' + self.class_name.upper() + '_PREPARE_UNIT_TEST')
+        self.fd.write('\n')
+        self.generate_function_comment('Compile with one of the following line:\n' +
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
+        self.fd.write('int main()\n')
+        self.fd.write('{\n')
+
+        self.generate_unit_tests_macro()
+        self.generate_unit_tests_check_initial_state()
+        self.generate_unit_tests_check_cycles()
+        self.generate_unit_tests_pathes_to_sinks()
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
         self.fd.write('    return EXIT_SUCCESS;\n')
         self.fd.write('}\n\n')
+
+    ###########################################################################
+    ### Code generator: Add an example of how using this state machine. It
+    ### gets all cycles in the graph and try them. This example can be used as
+    ### partial unit test. Not all cases can be generated since I dunno how to
+    ### parse guards to generate range of inputs.
+    ### FIXME Manage guard logic to know where to pass in edges.
+    ### FIXME Cycles does not make all test case possible
+    ###########################################################################
+    def generate_unit_tests(self, cxxfile):
+        filename = self.class_name + 'Tests.cpp'
+        self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
+        self.generate_unit_tests_header()
+        self.generate_unit_tests_main_function(filename)
         self.fd.close()
 
     ###########################################################################
