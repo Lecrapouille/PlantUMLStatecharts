@@ -264,7 +264,7 @@ class Parser(object):
          return list(nx.dfs_edges(self.graph, source=self.initial_state))
 
     ###########################################################################
-    ### Get all paths from all sources to sinks 
+    ### Get all paths from all sources to sinks
     ###########################################################################
     def graph_all_paths_to_sinks(self):
          all_paths = []
@@ -310,12 +310,19 @@ class Parser(object):
         self.generate_method_line_separator()
 
     ###########################################################################
+    ###
+    ###########################################################################
+    def generate_common_header(self):
+        self.fd.write('// This file as been generated the ')
+        self.fd.write(date.today().strftime("%B %d, %Y\n"))
+        self.fd.write('// This code generation is still experimental. Some border cases may not be correctly managed!\n\n')
+
+    ###########################################################################
     ### Code generator: add the header file.
     ### TODO include or insert custom header like done with flex/bison
     ###########################################################################
     def generate_header(self, hpp):
-        self.fd.write('// This file as been generated the ')
-        self.fd.write(date.today().strftime("%B %d, %Y\n"))
+        self.generate_common_header()
         if hpp:
             self.fd.write('#ifndef ' + self.class_name.upper() + '_HPP\n')
             self.fd.write('#  define ' + self.class_name.upper() + '_HPP\n\n')
@@ -588,6 +595,7 @@ class Parser(object):
         name = self.class_name.upper()
         guard_name = filename.upper().replace('.', '_')
         self.fd = open(path, 'w')
+        self.generate_common_header()
         self.fd.write('#ifndef ' + guard_name + '\n')
         self.fd.write('#  define ' + guard_name + '\n\n')
         self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
@@ -602,6 +610,7 @@ class Parser(object):
     ### Generate the header for the unit test file
     ###########################################################################
     def generate_unit_tests_header(self):
+        self.generate_common_header()
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
         self.fd.write('#include <cassert>\n')
@@ -641,33 +650,46 @@ class Parser(object):
     def generate_unit_tests_check_cycles(self):
         cycles = self.graph_cycles()
         for cycle in cycles:
+            # Print the cycle
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
             self.fd.write('    std::cout << "Check cycle: [*]')
             for c in cycle:
                 self.fd.write(' ' + c)
             self.fd.write('" << std::endl;\n')
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
+
+            # Reset the state machine and print the guard supposed to reach this state
             self.fd.write('    fsm.reset();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
             self.fd.write('\n')
+
+            # Iterate on all nodes of the cycle
             for i in range(len(cycle) - 1):
+                # External event: print the name of the event + its guard
                 event = self.graph[cycle[i]][cycle[i+1]]['data'].event
                 if event.name != '':
-                    guard = self.graph[cycle[i]][cycle[i+1]]['data'].guard
                     self.fd.write('    fsm.' + event.caller() + ';')
+                    guard = self.graph[cycle[i]][cycle[i+1]]['data'].guard
                     if guard != '':
                         self.fd.write(' // If ' + guard)
                     self.fd.write('\n')
+
                 if (i == len(cycle) - 2):
+                    # Cycle of non external evants => malformed state machine
+                    # I think this case is not good
                     if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
                         self.fd.write('    #warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
+                        # No explicit event => direct internal transition to the state if an explicit event can occures.
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
                         self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
                         self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+
+                # No explicit event => direct internal transition to the state if an explicit event can occures.
+                # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
                     self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
