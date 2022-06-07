@@ -24,9 +24,7 @@ from collections import defaultdict
 from collections import deque
 from datetime import date
 
-import sys
-import os
-import re
+import sys, os, re
 import networkx as nx
 
 ###############################################################################
@@ -42,7 +40,6 @@ class bcolors:
     ENDC = '\033[0m'
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
-
 
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML event.
@@ -183,51 +180,32 @@ class Parser(object):
         self.initial_state = ''
 
     ###########################################################################
+    ### Is the generated file should be a C++ source file or header file ?
+    ###########################################################################
+    def is_hpp_file(self, file):
+        filename, extension = os.path.splitext(file)
+        return True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
+
+    ###########################################################################
+    ### Print a warning message
+    ###########################################################################
+    def warning(self, msg):
+        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
+
+    ###########################################################################
+    ### Print an error message and exit
+    ###########################################################################
+    def fatal(self, msg):
+        print(f"{bcolors.FAIL}   FATAL in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
+        sys.exit(-1)
+
+    ###########################################################################
     ### Helper to raise an exception with a given and the current line where
     ### the error happened.
     ###########################################################################
     def parse_error(self, msg):
         print(f"{bcolors.FAIL}   Failed parsing " + self.name + " at line " + str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
         sys.exit(-1)
-
-    ###########################################################################
-    ### Print an error message and exit
-    ###########################################################################
-    def warning(self, msg):
-        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
-
-    ###########################################################################
-    ### Read a single line, tokenize its symbols and store them in a list.
-    ###########################################################################
-    def parse_line(self):
-        self.nb_tokens = 0
-        # Iterate for each empty line
-        while self.nb_tokens == 0:
-            self.lines += 1
-            line = self.fd.readline()
-            if not line:
-                return False
-            # Replace substring to be sure to parse correctly (ugly hack)
-            line = line.replace(':', ' : ')
-            line = line.replace('/', ' / ')
-            line = line.replace('\\n--\\n', ' / ')
-            #line = line.replace('[', ' [ ')
-            #line = line.replace(']', ' ] ')
-            #line = line.replace('\\n', ' ')
-            # Tokenize the line
-            self.tokens = line.strip().split(' ')
-            while '' in self.tokens:
-                self.tokens.remove('')
-            self.nb_tokens = len(self.tokens)
-            # Skip the line if detects a comment
-            if (self.nb_tokens > 0) and (self.tokens[0] == '\''):
-                self.nb_tokens = 0
-                continue
-            # Uncomment to help debuging
-            #print('\n=========\nparse_line: ' + line[:-1])
-            #for t in self.tokens:
-            #    print('token: "' + t + '"')
-        return True
 
     ###########################################################################
     ### Check if the token match for a C/C++ variable name
@@ -248,142 +226,9 @@ class Parser(object):
             self.graph.add_node(name, data = State(name))
 
     ###########################################################################
-    ### Parse the following plantUML code and store information of the analyse:
-    ###    State : Entry / action
-    ###    State : Exit / action
-    ###    State : On event [ guard ] / action
-    ###    State : Do / activity
-    ### We also offering some unofficial alternative name:
-    ###    State : Entering / action
-    ###    State : Leaving / action
-    ###    State : Event event [ guard ] / action
-    ###    State : Comment / C++ comment
+    ### Add a transition as graph arc with its attribute.
     ###########################################################################
-    def parse_state(self):
-        what = self.tokens[2].lower()
-        name = self.tokens[0].upper()
-
-        # Manage a pathological case:
-        self.assert_valid_C_name(name)
-
-        # Create first a node if it does not exist. This is the simplest way
-        # preventing smashing previously initialized values.
-        self.add_state(name)
-
-        # Update state fields
-        st = self.graph.nodes[name]['data']
-        if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
-            st.entering = ' '.join(self.tokens[4:])
-        elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
-            st.leaving = ' '.join(self.tokens[4:])
-        elif what == 'comment':
-            st.comment = ' '.join(self.tokens[4:])
-        # 'on event' is not sugar syntax to a real transition: since it disables
-        # 'entry' and 'exit' actions but we want create a real graph edege to
-        # help us on graph theory traversal algorithm (like finding cycles).
-        elif what in ['on', 'event']:
-            self.tokens = [ name, '->', name, ':' ] + self.tokens[3:]
-            self.parse_transition(True)
-            return
-        elif what == 'do':
-            self.parse_error('do / activity not yet implemented')
-        else:
-            self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
-
-    ###########################################################################
-    ### Parse a guar
-    ### TODO manage things like "when(event)" or "event(x)"
-    ###########################################################################
-    def concat_tokens(self, toks):
-        code = ''
-        for t in toks:
-            code += t
-            code += ' '
-        return code[:-1]
-
-    ###########################################################################
-    ### Parse an event.
-    ### TODO for the moment we do not manage boolean expression
-    ### TODO manage builtins such as "when(event)" or "after(x)"
-    ###########################################################################
-    def parse_event(self, event, toks):
-        if len(toks) == 0:
-            event.name = ''
-            event.params = []
-            return
-        parameters = False
-        event.name = toks[0].lower()
-        for t in toks[1:]:
-            if t[0] == '(':
-                parameters = True
-            elif t[0] == ')':
-                parameters = False
-                if event[-1] == ',':
-                    event.params.append(event[:-1])
-            if not parameters:
-                event.name += t.capitalize()
-            else:
-                event.name += t.upper() + 'const& ' + t + ','
-
-    ###########################################################################
-    ### Parse the following plantUML code and store information of the analyse:
-    ###    origin state -> destination state : event [ guard ] / action
-    ###    destination state <- origin state : event [ guard ] / action
-    ### In which event, guard and action are optional.
-    ###########################################################################
-    def parse_transition(self, as_state = False):
-        tr = Transition()
-
-        # Analyse the following plantUML code: "origin state -> destination state ..."
-        # Analyse the following plantUML code: "destination state <- origin state ..."
-        if self.tokens[1] == '->' or self.tokens[1] == '-->':
-            tr.origin, tr.destination = self.tokens[0].upper(), self.tokens[2].upper()
-        else:
-            tr.origin, tr.destination = self.tokens[2].upper(), self.tokens[0].upper()
-
-        self.add_state(tr.origin)
-        self.add_state(tr.destination)
-
-        # Initial state
-        if tr.origin == '[*]':
-            self.initial_state = tr.destination
-
-        # Analyse the following optional plantUML code: ": event ..."
-        if (self.nb_tokens > 3) and (self.tokens[3] == ':'):
-            i = 4
-            # Halt on the end of line or when detecting the beginning of a guard '[' or an action '/'
-            while (i < self.nb_tokens) and (self.tokens[i] not in ['[', '/']):
-                i += 1
-            self.parse_event(tr.event, self.tokens[4:i])
-
-            # Events are optional. If not given, we use them as anonymous internal event.
-            # Store them in a dictionary: "event => (origin, destination) states" to create
-            # the state transition for each event.
-            self.events[tr.event].append((tr.origin, tr.destination))
-
-            # Analyse the following optional plantUML code: "[ guard ] ..."
-            # Guards are optional. When optional they always return true.
-            if (i < self.nb_tokens) and (self.tokens[i] == '['):
-                i, j = i + 1, i + 1
-                while (i < self.nb_tokens) and (self.tokens[i] != ']'):
-                    i += 1
-                if self.tokens[i] != ']':
-                    self.parse_error("Unterminated guard close")
-                tr.guard = ' '.join(self.tokens[j:i])
-                i = i + 1
-
-            # Analyse the following optional plantUML code: "/ action"
-            if (i < self.nb_tokens) and (self.tokens[i] == '/'):
-                tr.action = ' '.join(self.tokens[i+1:])
-
-            # Distinguish a transition cycling to its own state from the "on event" on the state
-            if as_state and (tr.origin == tr.destination):
-                if tr.action == '':
-                    tr.action = '// Dummy action'
-                self.graph.nodes[tr.origin]['data'].event.name = tr.action
-                tr.action = ''
-
-        # Store parsed information as edge of the graph
+    def add_transition(self, tr):
         self.graph.add_edge(tr.origin, tr.destination, data=tr)
 
     ###########################################################################
@@ -449,9 +294,28 @@ class Parser(object):
             self.fd.write('#endif // ' + self.class_name.upper() + '_HPP')
 
     ###########################################################################
+    ### Code generator: add the enum of the states of the state machine.
+    ###########################################################################
+    def generate_state_enums(self):
+        self.generate_function_comment('States of the state machine.')
+        self.fd.write('enum ' + self.enum_name + '\n{\n')
+        self.fd.write('    // Client states\n')
+        for state in list(self.graph.nodes):
+            if state == '[*]':
+                continue
+            self.fd.write('    ' + state + ',')
+            comment = self.graph.nodes[state]['data'].comment
+            if comment != '':
+                self.fd.write(' //!< ' + comment)
+            self.fd.write('\n')
+        self.fd.write('    // Mandatory states\n')
+        self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
+        self.fd.write('};\n\n')
+
+    ###########################################################################
     ### Code generator: add the function that stringify states.
     ###########################################################################
-    def generate_stringify(self):
+    def generate_stringify_function(self):
         self.generate_function_comment('Convert enum states to human readable string.')
         self.fd.write('static inline const char* stringify(' + self.enum_name + ' const state)\n')
         self.fd.write('{\n')
@@ -536,7 +400,7 @@ class Parser(object):
         if self.graph.nodes['[*]']['data'].entering == '':
             return
         self.generate_method_comment('Reset the state machine.')
-        self.fd.write('    void reset()\n')
+        self.fd.write('    void start()\n')
         self.fd.write('    {\n')
         self.fd.write('        StateMachine::reset();\n')
         self.fd.write('        onEnteringInitialState();\n')
@@ -679,23 +543,26 @@ class Parser(object):
         self.fd.write('#endif\n')
 
     ###########################################################################
-    ### Code generator: add the enum of the states of the state machine.
+    ### Code generator: generate the header file which hold helper macros.
     ###########################################################################
-    def generate_state_enums(self):
-        self.generate_function_comment('States of the state machine.')
-        self.fd.write('enum ' + self.enum_name + '\n{\n')
-        self.fd.write('    // Client states\n')
-        for state in list(self.graph.nodes):
-            if state == '[*]':
-                continue
-            self.fd.write('    ' + state + ',')
-            comment = self.graph.nodes[state]['data'].comment
-            if comment != '':
-                self.fd.write(' //!< ' + comment)
-            self.fd.write('\n')
-        self.fd.write('    // Mandatory states\n')
-        self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
-        self.fd.write('};\n\n')
+    def generate_macros(self, cxxfile):
+        filename = self.class_name + 'Macros.hpp'
+        path = os.path.join(os.path.dirname(cxxfile), filename)
+        if os.path.exists(path):
+            return
+
+        name = self.class_name.upper()
+        guard_name = filename.upper().replace('.', '_')
+        self.fd = open(path, 'w')
+        self.fd.write('#ifndef ' + guard_name + '\n')
+        self.fd.write('#  define ' + guard_name + '\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_FUNCTIONS\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_VARIABLES\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_PREPARE_UNIT_TEST\n\n')
+        self.fd.write('#  define CUSTOM_' + name + '_INIT_UNIT_TEST_VARIABLES\n\n')
+        self.fd.write('#endif // ' + guard_name + '\n')
+        self.fd.close()
 
     ###########################################################################
     ### Code generator: Add an example of how using this state machine. It
@@ -773,13 +640,6 @@ class Parser(object):
         self.fd.close()
 
     ###########################################################################
-    ### Is the generated file should be a C++ source file or header file ?
-    ###########################################################################
-    def is_hpp_file(self, file):
-        filename, extension = os.path.splitext(file)
-        return True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
-
-    ###########################################################################
     ### Code generator: generate the code of the state machine
     ###########################################################################
     def generate_state_machine(self, cxxfile):
@@ -787,31 +647,9 @@ class Parser(object):
         self.fd = open(cxxfile, 'w')
         self.generate_header(hpp)
         self.generate_state_enums()
-        self.generate_stringify()
+        self.generate_stringify_function()
         self.generate_state_machine_class()
         self.generate_footer(hpp)
-        self.fd.close()
-
-    ###########################################################################
-    ### Code generator: generate the header file which hold helper macros.
-    ###########################################################################
-    def generate_macros(self, cxxfile):
-        filename = self.class_name + 'Macros.hpp'
-        path = os.path.join(os.path.dirname(cxxfile), filename)
-        if os.path.exists(path):
-            return
-
-        name = self.class_name.upper()
-        guard_name = filename.upper().replace('.', '_')
-        self.fd = open(path, 'w')
-        self.fd.write('#ifndef ' + guard_name + '\n')
-        self.fd.write('#  define ' + guard_name + '\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_FUNCTIONS\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_VARIABLES\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_PREPARE_UNIT_TEST\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_INIT_UNIT_TEST_VARIABLES\n\n')
-        self.fd.write('#endif // ' + guard_name + '\n')
         self.fd.close()
 
     ###########################################################################
@@ -822,68 +660,6 @@ class Parser(object):
         self.generate_state_machine(cxxfile)
         self.generate_unit_tests(cxxfile)
         self.generate_macros(cxxfile)
-
-    ###########################################################################
-    ### Count the total number of events which shall be > 1
-    ###########################################################################
-    def verify_number_of_events(self):
-        for e in self.events:
-            if e.name != '':
-                return
-
-        str = ''
-        cycle = list(nx.simple_cycles(self.graph))[0]
-        for c in cycle:
-            str += ' ' + c
-        self.warning('The state machine shall have at least one event to prevent infinite loop.'
-                     + '\n   For example:' + str)
-
-    ###########################################################################
-    ### Verify for each state if transitions are dereminist.
-    ### Case 1: each state having more than 1 transition in where one transition
-    ###         does not have event and guard.
-    ### Case 2: several transitions and guards does not check all cases (for
-    ###         example the Richman case with init quarters < 0.
-    ###########################################################################
-    def verify_transition(self):
-        # Case 1
-        for state in list(self.graph.nodes()):
-            out = list(self.graph.neighbors(state))
-            if len(out) <= 1:
-                continue
-            for d in out:
-                data = self.graph[state][d]['data']
-                if (data.event.name == '') and (data.guard == ''):
-                    self.warning('The state ' + state + ' has an issue with its transitions: it has'
-                                 ' several possible ways\n   while the way to state ' + d +
-                                 ' is always true and therefore will be always a candidate and transition'
-                                 ' to other states is\n   non determinist.')
-        # Case 2: TODO
-
-    ###########################################################################
-    ### Entry point to check if the state machine is well formed (determinist).
-    ### Do not exit the program or throw exception, just display warning on the
-    ### console.
-    ### TODO for each node: are transitions to output neighbors mutually exclusive ?
-    ### TODO Are all states reachable ?
-    ### TODO how to parse guards to do formal prooves ? Can formal proove be
-    ### used in a networkx graph ?
-    ###########################################################################
-    def is_state_machine_determinist(self):
-        self.verify_number_of_events()
-        self.verify_transition()
-        pass
-
-    ###########################################################################
-    ### Entry point of graph reorganization.
-    ### When parsing PlantUML we also create on the fly the graph structure but
-    ### some reorganization on the graph may be needed after the parsing step.
-    ### TBD: we can 'optimize' by suppressing nodes that do not have events but
-    ### we prefer not modifying the graph that the user made in PlantUML. We
-    ### add instead warnings to prevent him.
-    ###########################################################################
-    def finalize_machine(self):
-        self.manage_noevents()
 
     ###########################################################################
     ### Manage transitions without events: we name them internal event and the
@@ -904,6 +680,13 @@ class Parser(object):
                     states.append(s)
                 elif s != '[*]' and tr.event.name == '':
                     states.append(s)
+
+        # Check if destination state from [*] state has entry action
+        #for neighbor in list(self.graph.neighbors('[*]')):
+        #    if self.graph.nodes[neighbor]['data'].entering != '':
+        #        states.append('[*]')
+        #        break
+
         states = list(set(states))
 
         # Generate the internal transition in the entry action of the source state
@@ -951,25 +734,248 @@ class Parser(object):
                     count += 1
             self.graph.nodes[s]['data'].entering += code
 
-# FIXME finir le cas on entry not called
+    ###########################################################################
+    ### The state machine shall have an initial state.
+    ###########################################################################
+    def verify_initial_state(self):
+        if self.initial_state == '':
+            self.parse_error('Missing initial state')
 
     ###########################################################################
-    ### Entry point of the plantUML file parser.
-    ### umlfile: path to the plantuml file.
-    ### cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
-    ### classname: postfixe name for the state machine name.
+    ### Count the total number of events which shall be > 1
     ###########################################################################
-    def translate(self, umlfile, cpp_or_hpp, classname):
-        if not os.path.isfile(umlfile):
-            print('File path {} does not exist. Exiting...'.format(umlfile))
-            sys.exit(-1)
+    def verify_number_of_events(self):
+        for e in self.events:
+            if e.name != '':
+                return
 
+        str = ''
+        cycle = list(nx.simple_cycles(self.graph))[0]
+        for c in cycle:
+            str += ' ' + c
+        self.warning('The state machine shall have at least one event to prevent infinite loop.'
+                     + '\n   For example:' + str)
+
+    ###########################################################################
+    ### Verify for each state if transitions are dereminist.
+    ### Case 1: each state having more than 1 transition in where one transition
+    ###         does not have event and guard.
+    ### Case 2: several transitions and guards does not check all cases (for
+    ###         example the Richman case with init quarters < 0.
+    ###########################################################################
+    def verify_transitions(self):
+        # Case 1
+        for state in list(self.graph.nodes()):
+            out = list(self.graph.neighbors(state))
+            if len(out) <= 1:
+                continue
+            for d in out:
+                data = self.graph[state][d]['data']
+                if (data.event.name == '') and (data.guard == ''):
+                    self.warning('The state ' + state + ' has an issue with its transitions: it has'
+                                 ' several possible ways\n   while the way to state ' + d +
+                                 ' is always true and therefore will be always a candidate and transition'
+                                 ' to other states is\n   non determinist.')
+        # Case 2: TODO
+
+    ###########################################################################
+    ### Entry point to check if the state machine is well formed (determinist).
+    ### Do not exit the program or throw exception, just display warning on the
+    ### console.
+    ### TODO for each node: are transitions to output neighbors mutually exclusive ?
+    ### TODO Are all states reachable ?
+    ### TODO how to parse guards to do formal prooves ? Can formal proove be
+    ### used in a networkx graph ?
+    ###########################################################################
+    def is_state_machine_determinist(self):
+        self.verify_initial_state()
+        self.verify_number_of_events()
+        self.verify_transitions()
+        pass
+
+    ###########################################################################
+    ### Entry point of graph reorganization.
+    ### When parsing PlantUML we also create on the fly the graph structure but
+    ### some reorganization on the graph may be needed after the parsing step.
+    ### TBD: we can 'optimize' by suppressing nodes that do not have events but
+    ### we prefer not modifying the graph that the user made in PlantUML. We
+    ### add instead warnings to prevent him.
+    ###########################################################################
+    def finalize_machine(self):
+        self.is_state_machine_determinist()
+        self.manage_noevents()
+
+    ###########################################################################
+    ### Parse an event.
+    ### TODO for the moment we do not manage boolean expression
+    ### TODO manage builtins such as "when(event)" or "after(x)"
+    ###########################################################################
+    def parse_event(self, event, toks):
+        if len(toks) == 0:
+            event.name = ''
+            event.params = []
+            return
+        parameters = False
+        event.name = toks[0].lower()
+        for t in toks[1:]:
+            if t[0] == '(':
+                parameters = True
+            elif t[0] == ')':
+                parameters = False
+                if event[-1] == ',':
+                    event.params.append(event[:-1])
+            if not parameters:
+                event.name += t.capitalize()
+            else:
+                event.name += t.upper() + 'const& ' + t + ','
+
+    ###########################################################################
+    ### Parse the following plantUML code and store information of the analyse:
+    ###    origin state -> destination state : event [ guard ] / action
+    ###    destination state <- origin state : event [ guard ] / action
+    ### In which event, guard and action are optional.
+    ###########################################################################
+    def parse_transition(self, as_state = False):
+        tr = Transition()
+
+        if self.tokens[1][-1] == '>':
+            # Analyse the following plantUML code: "origin state -> destination state ..."
+            tr.origin, tr.destination = self.tokens[0].upper(), self.tokens[2].upper()
+        else:
+            # Analyse the following plantUML code: "destination state <- origin state ..."
+            tr.origin, tr.destination = self.tokens[2].upper(), self.tokens[0].upper()
+
+        # Add nodes first to be sure to access them later
+        self.add_state(tr.origin)
+        self.add_state(tr.destination)
+
+        # Initial/final states
+        if tr.origin == '[*]':
+            self.initial_state = tr.destination
+
+        # Analyse the following optional plantUML code: ": event ..."
+        if (self.nb_tokens > 3) and (self.tokens[3] == ':'):
+            i = 4
+            # Halt on the end of line or when detecting the beginning of a guard '[' or an action '/'
+            while (i < self.nb_tokens) and (self.tokens[i] not in ['[', '/']):
+                i += 1
+            self.parse_event(tr.event, self.tokens[4:i])
+
+            # Events are optional. If not given, we use them as anonymous internal event.
+            # Store them in a dictionary: "event => (origin, destination) states" to create
+            # the state transition for each event.
+            self.events[tr.event].append((tr.origin, tr.destination))
+
+            # Analyse the following optional plantUML code: "[ guard ] ..."
+            # Guards are optional. When optional they always return true.
+            if (i < self.nb_tokens) and (self.tokens[i] == '['):
+                i, j = i + 1, i + 1
+                while (i < self.nb_tokens) and (self.tokens[i] != ']'):
+                    i += 1
+                if self.tokens[i] != ']':
+                    self.parse_error("Unterminated guard close")
+                tr.guard = ' '.join(self.tokens[j:i])
+                i = i + 1
+
+            # Analyse the following optional plantUML code: "/ action"
+            if (i < self.nb_tokens) and (self.tokens[i] == '/'):
+                tr.action = ' '.join(self.tokens[i+1:])
+
+            # Distinguish a transition cycling to its own state from the "on event" on the state
+            if as_state and (tr.origin == tr.destination):
+                if tr.action == '':
+                    tr.action = '// Dummy action'
+                self.graph.nodes[tr.origin]['data'].event.name = tr.action
+                tr.action = ''
+
+        # Store parsed information as edge of the graph
+        self.add_transition(tr)
+
+    ###########################################################################
+    ### Parse the following plantUML code and store information of the analyse:
+    ###    State : Entry / action
+    ###    State : Exit / action
+    ###    State : On event [ guard ] / action
+    ###    State : Do / activity
+    ### We also offering some unofficial alternative name:
+    ###    State : Entering / action
+    ###    State : Leaving / action
+    ###    State : Event event [ guard ] / action
+    ###    State : Comment / C++ comment
+    ###########################################################################
+    def parse_state(self):
+        what = self.tokens[2].lower()
+        name = self.tokens[0].upper()
+
+        # Manage a pathological case:
+        self.assert_valid_C_name(name)
+
+        # Create first a node if it does not exist. This is the simplest way
+        # preventing smashing previously initialized values.
+        self.add_state(name)
+
+        # Update state fields
+        st = self.graph.nodes[name]['data']
+        if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
+            st.entering = ' '.join(self.tokens[4:])
+        elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
+            st.leaving = ' '.join(self.tokens[4:])
+        elif what == 'comment':
+            st.comment = ' '.join(self.tokens[4:])
+        # 'on event' is not sugar syntax to a real transition: since it disables
+        # 'entry' and 'exit' actions but we want create a real graph edege to
+        # help us on graph theory traversal algorithm (like finding cycles).
+        elif what in ['on', 'event']:
+            self.tokens = [ name, '->', name, ':' ] + self.tokens[3:]
+            self.parse_transition(True)
+            return
+        elif what == 'do':
+            self.parse_error('do / activity not yet implemented')
+        else:
+            self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
+
+    ###########################################################################
+    ### Read a single line, tokenize its symbols and store them in a list.
+    ###########################################################################
+    def parse_line(self):
+        self.nb_tokens = 0
+        # Iterate for each empty line
+        while self.nb_tokens == 0:
+            self.lines += 1
+            line = self.fd.readline()
+            if not line:
+                return False
+            # Replace substring to be sure to parse correctly (ugly hack)
+            line = line.replace(':', ' : ')
+            line = line.replace('/', ' / ')
+            line = line.replace('\\n--\\n', ' / ')
+            #line = line.replace('[', ' [ ')
+            #line = line.replace(']', ' ] ')
+            #line = line.replace('\\n', ' ')
+            # Tokenize the line
+            self.tokens = line.strip().split(' ')
+            while '' in self.tokens:
+                self.tokens.remove('')
+            self.nb_tokens = len(self.tokens)
+            # Skip the line if detects a comment
+            if (self.nb_tokens > 0) and (self.tokens[0] == '\''):
+                self.nb_tokens = 0
+                continue
+            # Uncomment to help debuging
+            #print('\n=========\nparse_line: ' + line[:-1])
+            #for t in self.tokens:
+            #    print('token: "' + t + '"')
+        return True
+
+    ###########################################################################
+    ### Parse plantUML file parser and create a graph structure.
+    ###########################################################################
+    def parse_plantuml_file(self, umlfile, cpp_or_hpp, classname):
         self.reset()
         self.fd = open(umlfile, 'r')
         self.name = Path(umlfile).stem
         self.class_name = self.name + classname
         self.enum_name = self.class_name + 'States'
-        cxxfile = self.class_name + '.' + cpp_or_hpp
 
         # PlantUML file shall start by '@startuml'
         if (not self.parse_line()) or (self.tokens[0] != '@startuml'):
@@ -989,9 +995,21 @@ class Parser(object):
                 self.parse_error('Bad line')
 
         self.fd.close()
-        self.is_state_machine_determinist()
+
+    ###########################################################################
+    ### Entry point for translating a plantUML file into a C++ source file.
+    ### umlfile: path to the plantuml file.
+    ### cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
+    ### classname: postfixe name for the state machine name.
+    ###########################################################################
+    def translate(self, umlfile, cpp_or_hpp, classname):
+        if not os.path.isfile(umlfile):
+            print('File path {} does not exist. Exiting...'.format(umlfile))
+            sys.exit(-1)
+
+        self.parse_plantuml_file(umlfile, cpp_or_hpp, classname)
         self.finalize_machine()
-        self.generate_code(cxxfile)
+        self.generate_code(self.class_name + '.' + cpp_or_hpp)
 
 ###############################################################################
 ### Display command line usage
