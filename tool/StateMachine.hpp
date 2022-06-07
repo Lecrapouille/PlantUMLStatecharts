@@ -151,15 +151,6 @@ public:
         //! time (AND ONLY THE FIRST TIME) the state. Note: the guard can
         //! prevent calling this function.
         xFuncPtr leaving = nullptr;
-        //! \brief Call the "on event" callback when the event occured. Note:
-        //! the guard can prevent calling this function. Entry and leaving
-        //! actions are not made if this function is called.
-
-        //! \note "on event [ guard ] / action" could be seen as transition
-        //! cycling on this state but this is partially false since "on entry"
-        //! and "on leaving" would not have been called (because not entering
-        //! leaving to a different state).
-        xFuncPtr onevent = nullptr;
     };
 
     //--------------------------------------------------------------------------
@@ -356,15 +347,6 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                 LOGD("[FSM INTERNALS] Call the transition %s -> %s action\n",
                      stringify(previous_state), stringify(transition->destination));
                 (reinterpret_cast<FSM*>(this)->*transition->action)();
-            }
-
-            // Entry and leaving actions are not made if the event specified by
-            // the "on event" clause happened.
-            if (cst.onevent != nullptr)
-            {
-                LOGD("[FSM INTERNALS] Call the state %s 'on event' action\n",
-                     stringify(previous_state));
-                (reinterpret_cast<FSM*>(this)->*cst.onevent)();
             }
 
             // Transitioning to a new state ?

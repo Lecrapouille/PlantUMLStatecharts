@@ -128,8 +128,6 @@ class State(object):
         self.entering = ''
         # Action to perform when leaving the state.
         self.leaving = ''
-        # Action to perform on event. FIXME only one managed
-        self.event = Event()
         # state : do / activity
         # self.activity = ''
 
@@ -419,10 +417,7 @@ class Parser(object):
                 self.generate_pointer_function('entering', s.name)
             if s.leaving != '':
                 self.generate_pointer_function('leaving', s.name)
-            if s.event.name != '':
-                self.generate_pointer_function('onevent', s.name)
-            # TODO
-            #if s.activity != '':
+            # TODO if s.activity != '':
             #    self.generate_pointer_function('activity', s.name)
             self.fd.write('        };\n')
             empty = False
@@ -541,14 +536,6 @@ class Parser(object):
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write('        ' + state.leaving + ';\n')
-                self.fd.write('    }\n\n')
-
-            if state.event.name != '':
-                self.generate_method_comment('Do the action on event XXX ' + state.name + '.')
-                self.fd.write('    void onEventState' + self.state_name(state.name) + '()\n')
-                self.fd.write('    {\n')
-                self.fd.write('        LOGD("[EVENT STATE ' + state.name + ']\\n");\n')
-                self.fd.write('        ' + state.event.name + ';\n')
                 self.fd.write('    }\n\n')
 
     ###########################################################################
@@ -1005,9 +992,8 @@ class Parser(object):
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
                 if tr.action == '':
-                    tr.action = '// Dummy action'
-                self.graph.nodes[tr.origin]['data'].event.name = tr.action
-                tr.action = ''
+                    tr.action = '// Dummy action\n'
+                    tr.action += '#warning "no state ' + tr.origin + ' reaciton to event ' + tr.event.name + '"'
 
         # Store parsed information as edge of the graph
         self.add_transition(tr)
