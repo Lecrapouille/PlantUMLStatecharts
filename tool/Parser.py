@@ -304,15 +304,13 @@ class Parser(object):
         self.fd.write('enum ' + self.enum_name + '\n{\n')
         self.fd.write('    // Client states\n')
         for state in list(self.graph.nodes):
-            if state == '[*]':
-                continue
-            self.fd.write('    ' + state + ',')
+            self.fd.write('    ' + self.state_name(state) + ',')
             comment = self.graph.nodes[state]['data'].comment
             if comment != '':
                 self.fd.write(' //!< ' + comment)
             self.fd.write('\n')
         self.fd.write('    // Mandatory states\n')
-        self.fd.write('    ' + self.state_name(self.initial_state) + ', IGNORING_EVENT_, CANNOT_HAPPEN_, MAX_STATES_\n')
+        self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
         self.fd.write('};\n\n')
 
     ###########################################################################
@@ -325,8 +323,7 @@ class Parser(object):
         self.fd.write('    static const char* s_states[] =\n')
         self.fd.write('    {\n')
         for state in list(self.graph.nodes):
-            if state != '[*]':
-                self.fd.write('        [' + self.enum_name + '::' + self.state_name(state) + '] = "' + self.state_name(state) + '",\n')
+            self.fd.write('        [' + self.enum_name + '::' + self.state_name(state) + '] = "' + state + '",\n')
         self.fd.write('    };\n')
         self.fd.write('\n')
         self.fd.write('    return s_states[state];\n')
@@ -337,9 +334,9 @@ class Parser(object):
     ###########################################################################
     def state_name(self, state):
         if state == '[*]':
-            return 'CONSTRUCTOR_'
+            return 'CONSTRUCTOR'
         if state == '*':
-            return 'DESTRUCTOR_'
+            return 'DESTRUCTOR'
         return state
 
     ###########################################################################
@@ -406,7 +403,7 @@ class Parser(object):
         self.fd.write('    void reset()\n')
         self.fd.write('    {\n')
         self.fd.write('        StateMachine::reset();\n')
-        self.fd.write('        onEnteringInitialState();\n')
+        self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
         self.fd.write('    }\n\n')
 
     ###########################################################################
@@ -578,12 +575,17 @@ class Parser(object):
         # to be sure to start by the initial state.
         cycles = []
         for cycle in list(nx.simple_cycles(self.graph)):
-            try:
-                index = cycle.index(self.initial_state)
+            index = -1
+            # Initial state may have several transitions so search the first
+            for n in self.graph.neighbors(self.initial_state):
+                try:
+                    index = cycle.index(n)
+                    break
+                except Exception as ValueError:
+                    continue
+            if index != -1:
                 cycles.append(cycle[index:] + cycle[:index])
                 cycles[-1].append(cycles[-1][0])
-            except Exception as ValueError:
-                continue
 
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
@@ -595,26 +597,45 @@ class Parser(object):
                                        '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
         self.fd.write('int main()\n')
         self.fd.write('{\n')
-        self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
         self.generate_custom_macro('    // Add here initial variables', '    CUSTOM_' + self.class_name.upper() + '_INIT_UNIT_TEST_VARIABLES')
         self.fd.write('\n    std::cout << "===========================================" << std::endl;\n')
-        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+        self.fd.write('    std::cout << "Check current state" << std::endl;\n')
         self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(self.initial_state) + ');\n')
-        self.fd.write('    assert(strcmp(fsm.c_str(), "' + self.state_name(self.initial_state) + '") == 0);\n')
+        self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n')
+        # Initial state may have several transitions
+        neighbors = list(self.graph.neighbors(self.initial_state))
+        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::')
+        l = [ self.state_name(e) for e in self.graph.neighbors(self.initial_state)]
+        self.fd.write(('\n          || fsm.state() == ' + self.enum_name + '::').join(l))
+        self.fd.write(');\n')
+
+        self.fd.write('    assert(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
+        for n in neighbors[1:]:
+            self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
+        self.fd.write(');\n')
+
+
         self.fd.write('    LOGD("Test: ok\\n");\n\n')
         for cycle in cycles:
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    std::cout << "Cycle:')
+            self.fd.write('    std::cout << "Check cycle:')
             for c in cycle:
                 self.fd.write(' ' + c)
             self.fd.write('" << std::endl;\n')
             self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    fsm.reset();\n')
+            self.fd.write('    fsm.reset();')
+            guard = self.graph[self.initial_state][cycle[0]]['data'].guard
+            if guard != '':
+                self.fd.write(' // If ' + guard)
+            self.fd.write('\n')
             for i in range(len(cycle) - 1):
                 event = self.graph[cycle[i]][cycle[i+1]]['data'].event
                 if event.name != '':
-                    self.fd.write('    fsm.' + event.caller() + ';\n')
+                    guard = self.graph[cycle[i]][cycle[i+1]]['data'].guard
+                    self.fd.write('    fsm.' + event.caller() + ';')
+                    if guard != '':
+                        self.fd.write(' // If ' + guard)
+                    self.fd.write('\n')
                 if (i == len(cycle) - 2):
                     if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
                         self.fd.write('    #warning "Malformed state machine: unreachable destination state"\n\n')
@@ -681,7 +702,7 @@ class Parser(object):
         code = ''
         for state in states:
             count = 0 # count number of ways
-            code = '\n        LOGD("[STATE ' + state +  '] Transitioning by internal event\\n");\n'
+            code = '\n        LOGD("[STATE ' + state +  '] Internal transition\\n");\n'
             for dest in list(self.graph.neighbors(state)):
                 tr = self.graph[state][dest]['data']
                 s = self.state_name(state)
