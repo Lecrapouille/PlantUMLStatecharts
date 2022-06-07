@@ -654,13 +654,25 @@ class Parser(object):
 
             # Iterate on all nodes of the cycle
             for i in range(len(cycle) - 1):
+                # External event not leaving the current state
+                if self.graph.has_edge(cycle[i], cycle[i]):
+                    d = self.graph[cycle[i]][cycle[i]]['data']
+                    if d.event.name != '':
+                        self.fd.write('    fsm.' + d.event.caller() + ';')
+                        if d.guard != '':
+                            self.fd.write(' // If ' + d.guard)
+                        self.fd.write('\n')
+                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i] + ');\n')
+                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i] + '") == 0);\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+
                 # External event: print the name of the event + its guard
-                event = self.graph[cycle[i]][cycle[i+1]]['data'].event
-                if event.name != '':
-                    self.fd.write('    fsm.' + event.caller() + ';')
-                    guard = self.graph[cycle[i]][cycle[i+1]]['data'].guard
-                    if guard != '':
-                        self.fd.write(' // If ' + guard)
+                d = self.graph[cycle[i]][cycle[i+1]]['data']
+                if d.event.name != '':
+                    self.fd.write('    fsm.' + d.event.caller() + ';')
+                    if d.guard != '':
+                        self.fd.write(' // If ' + d.guard)
                     self.fd.write('\n')
 
                 if (i == len(cycle) - 2):
