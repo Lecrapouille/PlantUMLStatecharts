@@ -237,6 +237,11 @@ public:
 
 protected:
 
+    //--------------------------------------------------------------------------
+    //! \brief Internal transition: jump to the desired state from internal
+    //! event. This will call the guard, leaving actions, entering actions ...
+    //! \param[in] transitions the table of transitions.
+    //--------------------------------------------------------------------------
     void transition(Transition const* transition);
 
 protected:
