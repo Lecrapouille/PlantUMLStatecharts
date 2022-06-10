@@ -355,7 +355,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
             }
 
             // Transitioning to a new state ?
-            else if (previous_state != transition->destination)
+            if (previous_state != transition->destination)
             {
                 if (cst.leaving != nullptr)
                 {
