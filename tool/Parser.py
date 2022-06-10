@@ -161,8 +161,11 @@ class Parser(object):
         self.lines = 0
         # Dictionnary of "event => (source, destination) states" needed to
         # compute tables of state transitions for each events.
-        self.events = defaultdict(list)
+        self.lookup_events = defaultdict(list)
         # Store all parsed information from plantUML file as a graph.
+        # FIXME shall be nx.MultiDiGraph() since we cannot create several events
+        # leaving and entering to the same state or two events from a source
+        # state going to the same destination state.
         self.graph = nx.DiGraph()
         # Initial / final states
         self.initial_state = ''
@@ -175,8 +178,8 @@ class Parser(object):
         self.tokens = []
         self.nb_tokens = 0
         self.lines = 0
-        self.events = defaultdict(list)
-        self.graph = nx.DiGraph()
+        self.lookup_events = defaultdict(list)
+        self.graph = nx.DiGraph() # TODO nx.MultiDiGraph()
         self.initial_state = ''
         self.final_state = ''
 
@@ -308,7 +311,7 @@ class Parser(object):
         self.generate_method_line_separator()
 
     ###########################################################################
-    ###
+    ### You can add here your copyright, license ...
     ###########################################################################
     def generate_common_header(self):
         self.fd.write('// This file as been generated the ')
@@ -408,7 +411,7 @@ class Parser(object):
                 continue
 
             s = self.graph.nodes[state]['data']
-            if (s.entering == '') and (s.leaving == '') and (s.event.name == ''):
+            if (s.entering == '') and (s.leaving == ''):
                 continue
 
             self.fd.write('        m_states[' + self.enum_name + '::' + self.state_name(s.name) + '] =\n')
@@ -453,7 +456,7 @@ class Parser(object):
     ### Code generator: add all methods associated with external events.
     ###########################################################################
     def generate_external_events(self):
-        for event, arcs in self.events.items():
+        for event, arcs in self.lookup_events.items():
             if event.name == '':
                 continue
 
@@ -466,9 +469,9 @@ class Parser(object):
             for origin, destination in arcs:
                 tr = self.graph[origin][destination]['data']
                 self.fd.write('            {\n')
-                self.fd.write('                ' + self.enum_name + '::' + origin + ',\n')
+                self.fd.write('                ' + self.enum_name + '::' + self.state_name(origin) + ',\n')
                 self.fd.write('                {\n')
-                self.fd.write('                    ' + self.enum_name + '::' + destination + ',\n')
+                self.fd.write('                    ' + self.enum_name + '::' + self.state_name(destination) + ',\n')
                 if tr.guard != '':
                     self.fd.write('                    &' + self.class_name + '::onGuardingTransition')
                     self.fd.write(self.state_name(origin) + '_' + self.state_name(destination) + ',\n')
@@ -598,6 +601,7 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_header(self):
         self.generate_common_header()
+        self.fd.write('// FIXME use Google test and check if guards and actions have been called\n')
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
         self.fd.write('#include <cassert>\n')
@@ -629,7 +633,7 @@ class Parser(object):
         for n in neighbors[1:]:
             self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
         self.fd.write(');\n')
-        self.fd.write('    LOGD("Test: ok\\n");\n\n')
+        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
     ###########################################################################
     ### Generate checks on all cycles
@@ -650,29 +654,31 @@ class Parser(object):
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
-            self.fd.write('\n')
+            self.fd.write('\n\n')
 
             # Iterate on all nodes of the cycle
             for i in range(len(cycle) - 1):
                 # External event not leaving the current state
-                if self.graph.has_edge(cycle[i], cycle[i]):
-                    d = self.graph[cycle[i]][cycle[i]]['data']
-                    if d.event.name != '':
-                        self.fd.write('    fsm.' + d.event.caller() + ';')
-                        if d.guard != '':
-                            self.fd.write(' // If ' + d.guard)
+                if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
+                    tr = self.graph[cycle[i]][cycle[i]]['data']
+                    if tr.event.name != '':
+                        self.fd.write('    LOGD("// Event ' + tr.event.name + ': ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+                        self.fd.write('    fsm.' + tr.event.caller() + ';')
+                        if tr.guard != '':
+                            self.fd.write(' // If ' + tr.guard)
                         self.fd.write('\n')
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i] + ');\n')
+                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i] + '") == 0);\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
                 # External event: print the name of the event + its guard
-                d = self.graph[cycle[i]][cycle[i+1]]['data']
-                if d.event.name != '':
-                    self.fd.write('    fsm.' + d.event.caller() + ';')
-                    if d.guard != '':
-                        self.fd.write(' // If ' + d.guard)
+                tr = self.graph[cycle[i]][cycle[i+1]]['data']
+                if tr.event.name != '':
+                    self.fd.write('    LOGD("// Event ' + tr.event.name + ': ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.fd.write('    fsm.' + tr.event.caller() + ';')
+                    if tr.guard != '':
+                        self.fd.write(' // If ' + tr.guard)
                     self.fd.write('\n')
 
                 if (i == len(cycle) - 2):
@@ -683,17 +689,17 @@ class Parser(object):
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                         self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + cycle[i+1] + ');\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                     self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
     ###########################################################################
     ### Generate checks on pathes to all sinks
@@ -711,7 +717,7 @@ class Parser(object):
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
-            self.fd.write('\n')
+            self.fd.write('\n\n')
             for i in range(len(path) - 1):
                 event = self.graph[path[i]][path[i+1]]['data'].event
                 if event.name != '':
@@ -722,14 +728,14 @@ class Parser(object):
                     self.fd.write('\n')
                 if (i == len(path) - 2):
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + path[i+1] + ');\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + path[i+1] + ');\n')
+                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
     ###########################################################################
     ### Generate the main function doing unit tests
@@ -749,7 +755,7 @@ class Parser(object):
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
         self.fd.write('    return EXIT_SUCCESS;\n')
-        self.fd.write('}\n\n')
+        self.fd.write('}\n')
 
     ###########################################################################
     ### Code generator: Add an example of how using this state machine. It
@@ -863,7 +869,7 @@ class Parser(object):
     ### Count the total number of events which shall be > 1
     ###########################################################################
     def verify_number_of_events(self):
-        for e in self.events:
+        for e in self.lookup_events:
             if e.name != '':
                 return
 
@@ -888,8 +894,8 @@ class Parser(object):
             if len(out) <= 1:
                 continue
             for d in out:
-                data = self.graph[state][d]['data']
-                if (data.event.name == '') and (data.guard == ''):
+                tr = self.graph[state][d]['data']
+                if (tr.event.name == '') and (tr.guard == ''):
                     self.warning('The state ' + state + ' has an issue with its transitions: it has'
                                  ' several possible ways\n   while the way to state ' + d +
                                  ' is always true and therefore will be always a candidate and transition'
@@ -963,15 +969,16 @@ class Parser(object):
             # Analyse the following plantUML code: "destination state <- origin state ..."
             tr.origin, tr.destination = self.tokens[2].upper(), self.tokens[0].upper()
 
-        # Add nodes first to be sure to access them later
-        self.add_state(tr.origin)
-        self.add_state(tr.destination)
-
         # Initial/final states
         if tr.origin == '[*]':
             self.initial_state = '[*]'
         elif tr.destination == '[*]':
+            tr.destination = '*'
             self.final_state = '*'
+
+        # Add nodes first to be sure to access them later
+        self.add_state(tr.origin)
+        self.add_state(tr.destination)
 
         # Analyse the following optional plantUML code: ": event ..."
         if (self.nb_tokens > 3) and (self.tokens[3] == ':'):
@@ -984,7 +991,7 @@ class Parser(object):
             # Events are optional. If not given, we use them as anonymous internal event.
             # Store them in a dictionary: "event => (origin, destination) states" to create
             # the state transition for each event.
-            self.events[tr.event].append((tr.origin, tr.destination))
+            self.lookup_events[tr.event].append((tr.origin, tr.destination))
 
             # Analyse the following optional plantUML code: "[ guard ] ..."
             # Guards are optional. When optional they always return true.

@@ -1,6 +1,7 @@
-- Silver on event KO et VehicleOff::Entry pas appeleé
+https://github.com/cotestatnt/YA_FSM
+
 - Motor: setSpeed(x)() + ajouter LOGD + comment passer x dans la guarde ?
-- Motor: IDLE::onentry pas appelee*
-- Motor: Ko car SPIN::on event est appele meme sur halt du coup ne passe pas dans STOP
-- 2 transitions avec evenement pas gérés
+- 2 transitions avec evenement pas gérés: Shall use nx.MultiDiGraph() but
+  our transition tables does not manage it.
 - printf("\\n")
+- Use gtest and check if guards and actions are called.

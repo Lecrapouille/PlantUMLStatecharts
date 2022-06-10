@@ -1,0 +1,20 @@
+@startuml
+skin rose
+
+[*] -> State1
+
+State1 --> State2 : event1 [ guard1 ] / action1()
+State1 <-- State2 : event2
+State2 -> [*] : event6
+
+State1 : entry / action7()
+State1 : exit / action8()
+State1 : on event3 [ guard3 ] / action3()
+' FIXME not managed State1 : on event4 / action4()
+
+State2 : entry / action9()
+State2 : exit / action10()
+State2 : on event5 / action5()
+' FIXME not managed State2 : on event6 [ guard6 ] / action6()
+
+@enduml

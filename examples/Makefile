@@ -50,7 +50,7 @@ COMPIL_FLAGS += -Wno-switch-enum -Wno-undef -Wno-unused-parameter   \
 # Project flags
 CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS)
 
-TARGETS = RichMan.cpp
+TARGETS = Simple.cpp
 
 # Gumball.cpp: KO Tu pas generes correctement et boucle inifinie sur reset()
 # LoopError.cpp: KO ne lance pas la boucle infinie qui devrait etre lancee par reset()

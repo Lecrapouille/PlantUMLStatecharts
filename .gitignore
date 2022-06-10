@@ -1,3 +1,4 @@
 *~
 examples/build/*.cpp
 examples/build/*.png
+examples/build/*Controller.hpp
