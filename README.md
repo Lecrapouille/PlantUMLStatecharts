@@ -81,6 +81,13 @@ Note: I added some sugar syntax:
 - `\n--\naction` alias for `/ action` to follow Structured Analysis for Real Time syntax (but also to force carriage return on
   PlantUML diagrams).
 
+I added some syntax to help generate extra C++ code. They start with the `'` keyword which is a PlantUML single line comment
+so they will not produce syntax error when PlantUML is parsing the file but, on our side, we exploit them.
+- `'header` for adding code in the header of the file, before the class of the state machine. You can include other C++ files, create or define functions.
+- `'footer` for adding code in the footer of the file, after the class of the state machine.
+- `'init` is C++ code called by the constructor or bu the `reset()` function.
+- `'code` to allow you to add member variables or member functions.
+
 ## Rule of execution
 
 ![alt statemachine](doc/Simple.png)

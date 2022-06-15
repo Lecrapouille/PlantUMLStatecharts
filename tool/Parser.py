@@ -129,10 +129,30 @@ class State(object):
         # Action to perform when leaving the state.
         self.leaving = ''
         # state : do / activity
-        # self.activity = ''
+        self.activity = ''
 
     def __str__(self):
         return self.name + ': ' + self.entering + ' / ' + self.leaving
+
+###############################################################################
+### Add some extra C++ code in the generated code.
+###############################################################################
+class ExtraCode(object):
+
+    ###########################################################################
+    ### Default dummy constructor.
+    ###########################################################################
+    def __init__(self):
+        # Add code on the footer of the code before the class definition.
+        self.header = ''
+        # Add code on the footer of the code after the class definition.
+        self.footer = ''
+        # Add code for the class constructor, reset.
+        self.init = ''
+        # Add member functions and member variables in the class.
+        self.functions = ''
+        # Prepare the code for unit tests
+        self.unit_tests = ''
 
 ###############################################################################
 ### Context of the parser translating a PlantUML file depicting a state machine
@@ -170,6 +190,8 @@ class Parser(object):
         # Initial / final states
         self.initial_state = ''
         self.final_state = ''
+        # Extra C++ code
+        self.extra_code = ExtraCode()
 
     ###########################################################################
     ### Reset states
@@ -177,11 +199,13 @@ class Parser(object):
     def reset(self):
         self.tokens = []
         self.nb_tokens = 0
+        self.line = ''
         self.lines = 0
         self.lookup_events = defaultdict(list)
         self.graph = nx.DiGraph() # TODO nx.MultiDiGraph()
         self.initial_state = ''
         self.final_state = ''
+        self.extra_code = ExtraCode()
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
@@ -328,20 +352,17 @@ class Parser(object):
             self.fd.write('#ifndef ' + self.class_name.upper() + '_HPP\n')
             self.fd.write('#  define ' + self.class_name.upper() + '_HPP\n\n')
             self.fd.write('#  include "StateMachine.hpp"\n\n')
-            # FIXME broken indentation
-            self.generate_custom_macro('// Custom header file to implement macros to complete the compilation.',
-                                       '#  include "' + self.class_name + 'Macros.hpp"')
+            self.fd.write(self.extra_code.header)
         else:
             self.fd.write('#include "StateMachine.hpp"\n\n')
-            self.generate_custom_macro('// Custom header file to implement macros to complete the compilation.',
-                                       '#  include "' + self.class_name + 'Macros.hpp"')
-        self.fd.write('\n')
+            self.fd.write(self.extra_code.header)
 
     ###########################################################################
     ### Code generator: add the footer file.
     ### TODO include or insert custom footer like done with flex/bison
     ###########################################################################
     def generate_footer(self, hpp):
+        self.fd.write(self.extra_code.footer)
         if hpp:
             self.fd.write('#endif // ' + self.class_name.upper() + '_HPP')
 
@@ -351,14 +372,14 @@ class Parser(object):
     def generate_state_enums(self):
         self.generate_function_comment('States of the state machine.')
         self.fd.write('enum ' + self.enum_name + '\n{\n')
-        self.fd.write('    // Client states\n')
+        self.fd.write('    // Client states:\n')
         for state in list(self.graph.nodes):
             self.fd.write('    ' + self.state_name(state) + ',')
             comment = self.graph.nodes[state]['data'].comment
             if comment != '':
                 self.fd.write(' //!< ' + comment)
             self.fd.write('\n')
-        self.fd.write('    // Mandatory states\n')
+        self.fd.write('    // Mandatory internal states:\n')
         self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
         self.fd.write('};\n\n')
 
@@ -420,8 +441,8 @@ class Parser(object):
                 self.generate_pointer_function('entering', s.name)
             if s.leaving != '':
                 self.generate_pointer_function('leaving', s.name)
-            # TODO if s.activity != '':
-            #    self.generate_pointer_function('activity', s.name)
+            if s.activity != '':
+                self.generate_pointer_function('activity', s.name)
             self.fd.write('        };\n')
             empty = False
         if empty:
@@ -436,8 +457,7 @@ class Parser(object):
         self.fd.write('    ' + self.class_name + '() : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
         self.fd.write('    {\n')
         self.generate_table_states(states)
-        self.generate_custom_macro('\n        // Complete your constructor',
-                                   '        CUSTOM_' + self.class_name.upper() + '_CONSTRUCTOR')
+        self.fd.write(self.extra_code.init)
         self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
         self.fd.write('    }\n\n')
 
@@ -449,6 +469,7 @@ class Parser(object):
         self.fd.write('    void reset()\n')
         self.fd.write('    {\n')
         self.fd.write('        StateMachine::reset();\n')
+        self.fd.write(self.extra_code.init)
         self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
         self.fd.write('    }\n\n')
 
@@ -557,44 +578,8 @@ class Parser(object):
         self.generate_states_transitions_reactions()
         self.generate_states_states_reactions()
         name = self.class_name.upper()
-        self.generate_custom_macro('    // Define your member variables functions',
-                                   'private:\n    CUSTOM_' + name + '_MEMBER_FUNCTIONS'
-                                   '\n    CUSTOM_' + name + '_MEMBER_VARIABLES')
+        self.fd.write(self.extra_code.functions)
         self.fd.write('};\n\n')
-
-    ###########################################################################
-    ### Generate code with its comment inside a #ifdef #endif
-    ###########################################################################
-    def generate_custom_macro(self, comment, code):
-        self.fd.write(comment)
-        self.fd.write('\n#if defined(CUSTOMIZE_STATE_MACHINE') # self.class_name.upper()
-        self.fd.write(')\n')
-        self.fd.write(code)
-        self.fd.write('\n')
-        self.fd.write('#endif\n')
-
-    ###########################################################################
-    ### Code generator: generate the header file which hold helper macros.
-    ###########################################################################
-    def generate_macros(self, cxxfile):
-        filename = self.class_name + 'Macros.hpp'
-        path = os.path.join(os.path.dirname(cxxfile), filename)
-        if os.path.exists(path):
-            return
-
-        name = self.class_name.upper()
-        guard_name = filename.upper().replace('.', '_')
-        self.fd = open(path, 'w')
-        self.generate_common_header()
-        self.fd.write('#ifndef ' + guard_name + '\n')
-        self.fd.write('#  define ' + guard_name + '\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_CONSTRUCTOR\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_FUNCTIONS\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_MEMBER_VARIABLES\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_PREPARE_UNIT_TEST\n\n')
-        self.fd.write('#  define CUSTOM_' + name + '_INIT_UNIT_TEST_VARIABLES\n\n')
-        self.fd.write('#endif // ' + guard_name + '\n')
-        self.fd.close()
 
     ###########################################################################
     ### Generate the header for the unit test file
@@ -611,7 +596,7 @@ class Parser(object):
     ### Generate the macro for the unit test file
     ###########################################################################
     def generate_unit_tests_macro(self):
-        self.generate_custom_macro('    // Add here initial variables', '    CUSTOM_' + self.class_name.upper() + '_INIT_UNIT_TEST_VARIABLES')
+        self.fd.write(self.extra_code.unit_tests)
         self.fd.write('\n')
 
     ###########################################################################
@@ -741,7 +726,7 @@ class Parser(object):
     ### Generate the main function doing unit tests
     ###########################################################################
     def generate_unit_tests_main_function(self, filename):
-        self.generate_custom_macro('// Add here code to prepare unit tests', 'CUSTOM_' + self.class_name.upper() + '_PREPARE_UNIT_TEST')
+        self.fd.write(self.extra_code.unit_tests)
         self.fd.write('\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
                                        '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
@@ -792,7 +777,6 @@ class Parser(object):
     def generate_code(self, cxxfile):
         self.generate_state_machine(cxxfile)
         self.generate_unit_tests(cxxfile)
-        self.generate_macros(cxxfile)
 
     ###########################################################################
     ### Manage transitions without events: we name them internal event and the
@@ -1019,15 +1003,17 @@ class Parser(object):
 
     ###########################################################################
     ### Parse the following plantUML code and store information of the analyse:
-    ###    State : Entry / action
-    ###    State : Exit / action
-    ###    State : On event [ guard ] / action
-    ###    State : Do / activity
+    ### FIXME: limitation only one State : State : on event [ guard ] / action
+    ###    State : entry / action
+    ###    State : exit / action
+    ###    State : on event [ guard ] / action
+    ###    State : do / activity
     ### We also offering some unofficial alternative name:
-    ###    State : Entering / action
-    ###    State : Leaving / action
-    ###    State : Event event [ guard ] / action
-    ###    State : Comment / C++ comment
+    ###    State : entering / action
+    ###    State : leaving / action
+    ###    State : event event [ guard ] / action
+    ###    State : activity / activity
+    ###    State : comment / C++ comment
     ###########################################################################
     def parse_state(self):
         what = self.tokens[2].lower()
@@ -1041,52 +1027,93 @@ class Parser(object):
         self.add_state(name)
 
         # Update state fields
-        st = self.graph.nodes[name]['data']
+        state = self.graph.nodes[name]['data']
         if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
-            st.entering = ' '.join(self.tokens[4:])
+            state.entering += ' '.join(self.tokens[4:])
         elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
-            st.leaving = ' '.join(self.tokens[4:])
+            state.leaving += ' '.join(self.tokens[4:])
         elif what == 'comment':
-            st.comment = ' '.join(self.tokens[4:])
+            state.comment += ' '.join(self.tokens[4:])
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
         # help us on graph theory traversal algorithm (like finding cycles).
         elif what in ['on', 'event']:
             self.tokens = [ name, '->', name, ':' ] + self.tokens[3:]
             self.parse_transition(True)
-            return
-        elif what == 'do':
-            self.parse_error('do / activity not yet implemented')
+        elif what in ['do', 'activity']:
+            state.activity += ' '.join(self.tokens[4:])
         else:
             self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
 
     ###########################################################################
+    ### Remove 'xxx in the text and add some spaces for the indetation
+    ###########################################################################
+    def truncate(self, txt, d, spaces):
+        res = txt[txt.find(d) + len(d):].lstrip()
+        if res == '':
+            return res
+        return spaces + res
+
+    ###########################################################################
+    ### Some no PlantUML syntax interpreted as comment but which help us in
+    ### holding C++ code.
+    ###########################################################################
+    def parse_extra_code(self):
+        if self.tokens[0] == '\'header':
+            self.extra_code.header += self.truncate(self.line, self.tokens[0])
+        elif self.tokens[0] == '\'footer':
+            self.extra_code.footer += self.truncate(self.line, self.tokens[0])
+        elif self.tokens[0] == '\'init':
+            self.extra_code.init += self.truncate(self.line, self.tokens[0], '        ')
+        elif self.tokens[0] == '\'code':
+            self.extra_code.functions += self.truncate(self.line, self.tokens[0], '    ')
+        elif self.tokens[0] == '\'test':
+            self.extra_code.unit_tests += self.truncate(self.line, self.tokens[0])
+        #else:
+        #    print('Comment:', self.line)
+
+    ###########################################################################
     ### Read a single line, tokenize its symbols and store them in a list.
+    ### FIXME Quick and dirty way of doing it: a flex/bison parser would have
+    ### been be better while for parsing PlantUML this is fine. In fact, I did
+    ### not initially though that splitting by spaces has negative impact on
+    ### the C++ code for the guard and actions.
     ###########################################################################
     def parse_line(self):
         self.nb_tokens = 0
         # Iterate for each empty line
         while self.nb_tokens == 0:
             self.lines += 1
-            line = self.fd.readline()
-            if not line:
+            self.line = self.fd.readline()
+            if not self.line:
                 return False
+
             # Replace substring to be sure to parse correctly (ugly hack)
-            line = line.replace(':', ' : ')
-            line = line.replace('/', ' / ')
-            line = line.replace('\\n--\\n', ' / ')
-            #line = line.replace('[', ' [ ')
-            #line = line.replace(']', ' ] ')
-            #line = line.replace('\\n', ' ')
-            # Tokenize the line
-            self.tokens = line.strip().split(' ')
+            self.line = self.line.replace(':', ' : ')
+            self.line = self.line.replace('/', ' / ')
+            self.line = self.line.replace('\\n--\\n', ' / ')
+            self.line = self.line.replace(';\\n', '; ')
+            #self.line = self.line.replace('[', ' [ ')
+            #self.line = self.line.replace(']', ' ] ')
+            #self.line = self.line.replace('\\n', ' ')
+
+            # Tokenize the line (yes quick and dirty way)
+            self.tokens = self.line.strip().split(' ')
+
+            # Remove dummy tokens (multi spaces)
             while '' in self.tokens:
                 self.tokens.remove('')
+
+            # Detect a single-line-comment is present and remove tokens
+            # after the comment
+            for i in range(len(self.tokens)):
+                if self.tokens[i] == '\'':
+                    self.tokens = self.tokens[:i]
+                    break
+
+            # Cache the number of tokens
             self.nb_tokens = len(self.tokens)
-            # Skip the line if detects a comment
-            if (self.nb_tokens > 0) and (self.tokens[0] == '\''):
-                self.nb_tokens = 0
-                continue
+
             # Uncomment to help debuging
             #print('\n=========\nparse_line: ' + line[:-1])
             #for t in self.tokens:
@@ -1113,6 +1140,8 @@ class Parser(object):
                 self.parse_transition()
             elif (self.nb_tokens >= 4) and (self.tokens[1] == ':'):
                 self.parse_state()
+            elif self.tokens[0][0] == '\'':
+                self.parse_extra_code()
             elif self.tokens[0] == '@enduml':
                 break
             elif self.tokens[0] in ['hide', 'scale', 'skin']:

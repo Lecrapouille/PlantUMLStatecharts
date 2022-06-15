@@ -1,6 +1,15 @@
 @startuml
 skin rose
 
+'header #  include <stdio.h>
+'header #  define youpi printf("youpi\n")
+
+'code private:
+'code    void incr(int& x) { x += 1; printf("Quarters: %d\n", quarters); }
+'code
+'code private:
+'code    int quarters = 0;
+
 [*] -> FindQuarter
 FindQuarter --> CountQuarter : Get quarter [ quarters < 10 ]\n--\nincr(quarters)
 CountQuarter -> Youpii : [ quarters == 1 ] /

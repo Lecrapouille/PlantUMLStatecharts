@@ -1,6 +1,22 @@
 @startuml
 skin rose
 
+'code private:
+'code   void action1() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action3() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action4() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action5() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action6() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action7() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action8() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action9() { LOGD("[ACTION %s]\n", __func__); }
+'code   void action10() { LOGD("[ACTION %s]\n", __func__); }
+'code
+'code private:
+'code   bool guard1 = true;
+'code   bool guard3 = true;
+'code   bool guard6 = true;
+
 [*] -> State1
 
 State1 --> State2 : event1 [ guard1 ] / action1()
