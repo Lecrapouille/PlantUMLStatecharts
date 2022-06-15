@@ -33,6 +33,10 @@ This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python 
 - networkx https://networkx.org/ the tool read PlantUML file and create a DiGraph (shall be a MultiDiGraph) as intermediate
   structure before generating the C++ code.
 
+```
+python3 -m pip install networkx
+```
+
 ## Command line
 
 ```
