@@ -5,3 +5,4 @@ https://github.com/cotestatnt/YA_FSM
   our transition tables does not manage it.
 - printf("\\n")
 - Use gtest and check if guards and actions are called.
+- Couper les tests unitiaires en plusieurs petits tests.

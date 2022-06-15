@@ -3,7 +3,7 @@
 This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python 3 tool for:
 - Translating [PlantUML statecharts](https://plantuml.com/fr/state-diagram) file into C++ code of state machine.
 - The generated code is a compromise between simplicity to read, no virtual methods, memory foot print.
-- It's also generates some C++ unit tests to check your state machine.
+- It's also generates some C++ unit tests (Google tests) to check your state machine.
 - Do some basic verification if your state machine is well form.
 
 ![alt statemachine](doc/Simple.png)

@@ -586,18 +586,17 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_header(self):
         self.generate_common_header()
-        self.fd.write('// FIXME use Google test and check if guards and actions have been called\n')
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <iostream>\n')
-        self.fd.write('#include <cassert>\n')
-        self.fd.write('#include <cstring>\n\n')
+        self.fd.write('#include <gmock/gmock.h>\n')
+        self.fd.write('#include <gtest/gtest.h>\n')
+        self.fd.write('#include <cstring>\n')
 
     ###########################################################################
     ### Generate the macro for the unit test file
     ###########################################################################
     def generate_unit_tests_macro(self):
         self.fd.write(self.extra_code.unit_tests)
-        self.fd.write('\n')
 
     ###########################################################################
     ### Generate checks on initial state
@@ -609,12 +608,12 @@ class Parser(object):
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n')
         # Initial state may have several transitions
         neighbors = list(self.graph.neighbors(self.initial_state))
-        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::')
+        self.fd.write('    ASSERT_TRUE(fsm.state() == ' + self.enum_name + '::')
         l = [ self.state_name(e) for e in self.graph.neighbors(self.initial_state)]
         self.fd.write(('\n          || fsm.state() == ' + self.enum_name + '::').join(l))
         self.fd.write(');\n')
 
-        self.fd.write('    assert(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
+        self.fd.write('    ASSERT_TRUE(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
         for n in neighbors[1:]:
             self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
         self.fd.write(');\n')
@@ -653,8 +652,8 @@ class Parser(object):
                             self.fd.write(' // If ' + tr.guard)
                         self.fd.write('\n')
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
-                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i] + '") == 0);\n')
+                        self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
+                        self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
                         self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
                 # External event: print the name of the event + its guard
@@ -674,16 +673,16 @@ class Parser(object):
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
                         self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                        self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
-                        self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                        self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
+                        self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
                         self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
-                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + cycle[i+1] + '") == 0);\n')
+                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
+                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
                     self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
     ###########################################################################
@@ -713,13 +712,13 @@ class Parser(object):
                     self.fd.write('\n')
                 if (i == len(path) - 2):
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
-                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
+                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
+                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                     self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
                     self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
-                    self.fd.write('    assert(fsm.state() == ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
-                    self.fd.write('    assert(strcmp(fsm.c_str(), "' + path[i+1] + '") == 0);\n')
+                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
+                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                     self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
 
     ###########################################################################
@@ -729,17 +728,22 @@ class Parser(object):
         self.fd.write(self.extra_code.unit_tests)
         self.fd.write('\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -DFSM_DEBUG -DCUSTOMIZE_STATE_MACHINE ' + os.path.basename(filename))
-        self.fd.write('int main()\n')
-        self.fd.write('{\n')
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -I../../tool -DFSM_DEBUG ' + os.path.basename(filename) + ' `pkg-config --cflags --libs gtest gmock`')
+        self.fd.write('int main(int argc, char *argv[])\n{\n')
+        self.fd.write('    // The following line must be executed to initialize Google Mock\n')
+        self.fd.write('    // (and Google Test) before running the tests.\n')
+        self.fd.write('    ::testing::InitGoogleMock(&argc, argv);\n')
+        self.fd.write('    return RUN_ALL_TESTS();\n')
+        self.fd.write('}\n\n')
 
+        self.fd.write('// FIXME Generer plusieurs tests !!!!\n')
+        self.fd.write('TEST(Dico, LoadEmptyFile)\n{\n')
         self.generate_unit_tests_macro()
         self.generate_unit_tests_check_initial_state()
         self.generate_unit_tests_check_cycles()
         self.generate_unit_tests_pathes_to_sinks()
 
         self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
-        self.fd.write('    return EXIT_SUCCESS;\n')
         self.fd.write('}\n')
 
     ###########################################################################
