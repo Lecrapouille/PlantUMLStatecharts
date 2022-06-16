@@ -22,10 +22,20 @@
 # SOFTWARE.
 ###############################################################################
 
-PARSER=../tool/Parser.py
+# Our tool for parsing PlantUML statecharts and generate C++ code
+PLANTUML_PARSER = ../tool/Parser.py
+# File and class name prefix
+PREFIX = Controller
+# Arguments passed to $(PLANTUML_PARSER)
+PLANTUML_COMMAND_LINE = hpp $(PREFIX)
+# Uncomment this line if you do not want debug logs
+DEFINES += -DFSM_DEBUG
+# Outpout folder holding generated files and compilation
 BUILD = build
-VPATH = $(BUILD) input
-INCLUDES = -I$(BUILD) -Iinput -I. -I../tool
+# Makfile search files in folder
+VPATH = $(BUILD)
+# Search C++ header files
+INCLUDES = -I$(BUILD) -I../include
 
 # Verbosity control
 ifeq ($(VERBOSE),1)
@@ -34,7 +44,7 @@ else
 Q := @
 endif
 
-# C++14 (only because of std::make_unique not present in C++11)
+# C++14 is the minimum
 STANDARD=--std=c++14
 
 # Compilation flags
@@ -42,50 +52,56 @@ COMPIL_FLAGS = -Wall -Wextra -Wuninitialized -Wundef -Wunused       \
   -Wunused-result -Wunused-parameter -Wtype-limits -Wshadow         \
   -Wcast-align -Wcast-qual -Wconversion -Wfloat-equal               \
   -Wpointer-arith -Wswitch-enum -Wpacked -Wold-style-cast           \
-  -Wdeprecated -Wvariadic-macros -Wvla -Wsign-conversion -D_GLIBCXX_ASSERTIONS
+  -Wdeprecated -Wvariadic-macros -Wvla -Wsign-conversion            \
+  -D_GLIBCXX_ASSERTIONS
 
 COMPIL_FLAGS += -Wno-switch-enum -Wno-undef -Wno-unused-parameter   \
   -Wno-old-style-cast -Wno-sign-conversion -Wcast-function-type
 
-# Project flags
-CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS)
+# Project compile and linker flags. We depends on Google tests
+CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS) `pkg-config --cflags gtest gmock`
+LDFLAGS = `pkg-config --libs gtest gmock`
 
-TARGETS = Simple.cpp
+# Header file dependencies
+DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*$(PREFIX).Td
+POSTCOMPILE = mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
 
-# Gumball.cpp: KO Tu pas generes correctement et boucle inifinie sur reset()
-# LoopError.cpp: KO ne lance pas la boucle infinie qui devrait etre lancee par reset()
-# Erroneous.cpp: OK viens de corriger les transitions
-# Silver.cpp: KO entry du 1er etat pas appelle et on event KO
-# LKS.cpp: KO LED_steering = Disable;\nservoing = Disable; sinon semble OK
-# RichMan.cpp: OK
-# Motor.cpp: OK setspeed(x)() et on event sinon OK
+# Files to compile
+TARGETS = Simple LKS Gumball LoopError Erroneous RichMan Wifi
+# Motor
 
-# Silver.cpp LoopError.cpp Erroneous.cpp Gumball.cpp LKS.cpp Motor.cpp RichMan.cpp
+# Mandatory else Makefile drops temporary files.
+.PRECIOUS: $(BUILD)/%$(PREFIX)Tests.cpp
 
+# Compile targets
 .PHONY: all
 all: $(TARGETS)
 
-%: %.o
-	@echo "Linking $@"
-	$(Q)cd $(BUILD) && $(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+# Link the target
+%: %$(PREFIX)Tests.o
+	@echo "\033[0;32mLinking $@\033[0m"
+	$(Q)$(CXX) $(INCLUDES) -o $@ $^ $(LDFLAGS)
+	$(Q)mv $@ $(BUILD)
 
-%.o: $(BUILD)/%.cpp $(BUILD)/%.d
-	@echo "Compiling $<"
-	$(Q)$(CXX) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $(abspath $<) -o $(abspath $(BUILD)/$@)
-	@$(POSTCOMPILE)
+# Compile C++ source files
+%$(PREFIX)Tests.o: %$(PREFIX)Tests.cpp $(BUILD)/%$(PREFIX)Tests.d
+	@echo "\033[0;32mCompiling $<\033[0m"
+	$(Q)$(CXX) $(DEPFLAGS) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $(abspath $(BUILD)/$<) -o $(abspath $@)
+	$(POSTCOMPILE)
 
+# Create the UML diagrams
 %.png: %.plantuml
-	@echo "Generating chart $<"
+	@echo "\033[0;32mGenerating chart $<\033[0m"
 	$(Q)java -jar $(HOME)/plantuml-1.2022.5.jar $<
-	$(Q)mv input/$@ $(BUILD)
+	$(Q)mv $@ $(BUILD)
 
-%.cpp: %.plantuml %.png $(PARSER)
-	@echo "Parsing $<"
-	$(Q)(cd $(BUILD) && ../$(PARSER) ../$< hpp Controller)
+%$(PREFIX)Tests.cpp: %.plantuml %.png $(PLANTUML_PARSER) Makefile
+	@echo "\033[0;32mParsing $<\033[0m"
+	$(Q)(cd $(BUILD) && ../$(PLANTUML_PARSER) ../$< $(PLANTUML_COMMAND_LINE))
 
 .PHONY: clean
 clean:
-	@echo "cleaning"
+	@echo "\033[0;32mcleaning\033[0m"
 	$(Q)rm -fr $(BUILD)
 
 # Create the directory before compiling sources
@@ -98,4 +114,4 @@ $(BUILD)/%.d: ;
 .PRECIOUS: $(BUILD)/%.d
 
 # Header file dependencies
--include $(patsubst %,$(BUILD)/%.d,$(basename %.o))
+-include $(patsubst %,$(BUILD)/%$(PREFIX).d,$(basename %$(PREFIX).o))

@@ -6,3 +6,5 @@ https://github.com/cotestatnt/YA_FSM
 - printf("\\n")
 - Use gtest and check if guards and actions are called.
 - Couper les tests unitiaires en plusieurs petits tests.
+- Meilleur parsing: les "::" sont mis a " : : "
+- Gumbal: ko passer gumballs au constructur puis a sa variable member puis passer les bonnes valeurs pour les TU
