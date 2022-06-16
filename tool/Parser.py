@@ -303,36 +303,40 @@ class Parser(object):
     ###########################################################################
     ### Code generator: add a separator line for function.
     ###########################################################################
-    def generate_function_line_separator(self):
-        self.fd.write('//*****************************************************************************\n')
+    def generate_line_separator(self, spaces, s, count, c):
+        self.fd.write(s * spaces)
+        self.fd.write('//')
+        self.fd.write(c * count)
+        self.fd.write('\n')
+
+    ###########################################################################
+    ### Code generator: add a function  or methodcomment.
+    ###########################################################################
+    def generate_comment(self, spaces, s, comment, c):
+        final_comment = ('//! \\brief')
+        if comment != '':
+            final_comment += ' '
+            final_comment += comment
+
+        longest_list = max(len(elem) for elem in final_comment.split('\n'))
+        N = max(longest_list, 80) - len(s) * spaces
+        self.generate_line_separator(spaces, s, N, c)
+        self.fd.write(s * spaces)
+        self.fd.write(final_comment)
+        self.fd.write('\n')
+        self.generate_line_separator(spaces, s, N, c)
 
     ###########################################################################
     ### Code generator: add a dummy function comment.
     ###########################################################################
     def generate_function_comment(self, comment):
-        self.generate_function_line_separator()
-        if comment == '':
-            self.fd.write('//! \\brief\n')
-        else:
-            self.fd.write('//! \\brief ' + comment + '\n')
-        self.generate_function_line_separator()
-
-    ###########################################################################
-    ### Code generator: add a separator line for methods.
-    ###########################################################################
-    def generate_method_line_separator(self):
-        self.fd.write('    //-------------------------------------------------------------------------\n')
+        self.generate_comment(0, ' ', comment, '*')
 
     ###########################################################################
     ### Code generator: add a dummy method comment.
     ###########################################################################
     def generate_method_comment(self, comment):
-        self.generate_method_line_separator()
-        if comment == '':
-            self.fd.write('    //! \\brief\n')
-        else:
-            self.fd.write('    //! \\brief ' + comment + '\n')
-        self.generate_method_line_separator()
+        self.generate_comment(4, ' ', comment, '-')
 
     ###########################################################################
     ### You can add here your copyright, license ...
@@ -453,7 +457,7 @@ class Parser(object):
     ###########################################################################
     def generate_constructor(self):
         states = list(self.graph.nodes)
-        self.generate_method_comment('Default dummy constructor. Start from initial state and call it actions.')
+        self.generate_method_comment('Default constructor. Start from initial state and call it actions.')
         self.fd.write('    ' + self.class_name + '() : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
         self.fd.write('    {\n')
         self.generate_table_states(states)
@@ -518,7 +522,7 @@ class Parser(object):
         for origin, destination in transitions:
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
-                self.generate_method_comment('Guard the transition from state ' + origin  + '\n    //! to state ' + destination + '.')
+                self.generate_method_comment('Guard the transition from state ' + origin  + ' to state ' + destination + '.')
                 self.fd.write('    bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        const bool guard = (' + tr.guard + ');\n')
@@ -528,7 +532,7 @@ class Parser(object):
                 self.fd.write('    }\n\n')
 
             if tr.action != '':
-                self.generate_method_comment('Do the action when transitioning from state ' + origin + '\n    //! to state ' + destination + '.')
+                self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
                 self.fd.write('    void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
