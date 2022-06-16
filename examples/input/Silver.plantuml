@@ -1,13 +1,13 @@
 @startuml
 skin rose
 
-'code   void SilverController::pairing_phone() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::blue_led_off() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::white_led_off() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::blue_led_blinking() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::white_led_glow() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::blue_led_constant_glow() { LOGD("[ACTION %s]\n", __func__); }
-'code   void SilverController::launch_home_screen() { LOGD("[ACTION %s]\n", __func__); }
+'code   void pairing_phone() { LOGD("[ACTION %s]\n", __func__); }
+'code   void blue_led_off() { LOGD("[ACTION %s]\n", __func__); }
+'code   void white_led_off() { LOGD("[ACTION %s]\n", __func__); }
+'code   void blue_led_blinking() { LOGD("[ACTION %s]\n", __func__); }
+'code   void white_led_glow() { LOGD("[ACTION %s]\n", __func__); }
+'code   void blue_led_constant_glow() { LOGD("[ACTION %s]\n", __func__); }
+'code   void launch_home_screen() { LOGD("[ACTION %s]\n", __func__); }
 
 [*] --> VehiculeOff
 
