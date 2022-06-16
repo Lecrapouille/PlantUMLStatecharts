@@ -591,54 +591,72 @@ class Parser(object):
     def generate_unit_tests_header(self):
         self.generate_common_header()
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
-        self.fd.write('#include <iostream>\n')
         self.fd.write('#include <gmock/gmock.h>\n')
         self.fd.write('#include <gtest/gtest.h>\n')
-        self.fd.write('#include <cstring>\n')
-
-    ###########################################################################
-    ### Generate the macro for the unit test file
-    ###########################################################################
-    def generate_unit_tests_macro(self):
+        self.fd.write('#include <cstring>\n\n')
         self.fd.write(self.extra_code.unit_tests)
+        if self.extra_code.unit_tests != '':
+            self.fd.write('\n')
 
     ###########################################################################
-    ### Generate checks on initial state
+    ### Generate the footer for the unit test file
     ###########################################################################
-    def generate_unit_tests_check_initial_state(self):
-        self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-        self.fd.write('    std::cout << "Check current state" << std::endl;\n')
-        self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-        self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n')
-        # Initial state may have several transitions
+    def generate_unit_tests_footer(self):
+        pass
+
+    ###########################################################################
+    ### Generate checks on initial state.
+    ### Initial state may have several transitions.
+    ###########################################################################
+    def generate_unit_tests_assertions_initial_state(self):
+        # List of possible state enums
         neighbors = list(self.graph.neighbors(self.initial_state))
         self.fd.write('    ASSERT_TRUE(fsm.state() == ' + self.enum_name + '::')
         l = [ self.state_name(e) for e in self.graph.neighbors(self.initial_state)]
         self.fd.write(('\n          || fsm.state() == ' + self.enum_name + '::').join(l))
         self.fd.write(');\n')
-
+        # List of possible state strings
         self.fd.write('    ASSERT_TRUE(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
         for n in neighbors[1:]:
             self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
         self.fd.write(');\n')
-        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+
+    ###########################################################################
+    ### Generate checks on initial state
+    ###########################################################################
+    def generate_unit_tests_check_initial_state(self):
+        self.generate_line_separator(0, ' ', 80, '-')
+        self.fd.write('TEST(' + self.class_name + 'Tests, TestInitialSate)\n{\n')
+        self.fd.write('    LOGD("===============================================\\n");\n')
+        self.fd.write('    LOGD("Check initial state after constructor or reset.\\n");\n')
+        self.fd.write('    LOGD("===============================================\\n");\n')
+        self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
+        self.generate_unit_tests_assertions_initial_state()
+        self.fd.write('    fsm.reset();\n')
+        self.generate_unit_tests_assertions_initial_state()
+        self.fd.write('}\n\n')
 
     ###########################################################################
     ### Generate checks on all cycles
     ###########################################################################
     def generate_unit_tests_check_cycles(self):
+        count = 0
         cycles = self.graph_cycles()
         for cycle in cycles:
+            self.generate_line_separator(0, ' ', 80, '-')
+            self.fd.write('TEST(' + self.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
+            count += 1
             # Print the cycle
-            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    std::cout << "Check cycle: [*]')
+            self.fd.write('    LOGD("===========================================\\n");\n')
+            self.fd.write('    LOGD("Check cycle: [*]')
             for c in cycle:
                 self.fd.write(' ' + c)
-            self.fd.write('" << std::endl;\n')
-            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
+            self.fd.write('\\n");\n')
+            self.fd.write('    LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.fd.write('    fsm.reset();')
+            self.fd.write('    ' + self.class_name + ' ' + 'fsm;')
+            # self.fd.write('    fsm.reset();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
@@ -650,20 +668,20 @@ class Parser(object):
                 if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
                     tr = self.graph[cycle[i]][cycle[i]]['data']
                     if tr.event.name != '':
-                        self.fd.write('    LOGD("// Event ' + tr.event.name + ': ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+                        self.fd.write('    LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
                         self.fd.write('    fsm.' + tr.event.caller() + ';')
                         if tr.guard != '':
                             self.fd.write(' // If ' + tr.guard)
                         self.fd.write('\n')
-                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                        self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
                         self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
 
                 # External event: print the name of the event + its guard
                 tr = self.graph[cycle[i]][cycle[i+1]]['data']
                 if tr.event.name != '':
-                    self.fd.write('    LOGD("// Event ' + tr.event.name + ': ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.fd.write('    LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
                     self.fd.write('    fsm.' + tr.event.caller() + ';')
                     if tr.guard != '':
                         self.fd.write(' // If ' + tr.guard)
@@ -676,32 +694,37 @@ class Parser(object):
                         self.fd.write('    #warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
-                        self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                        self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                         self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
+            self.fd.write('}\n\n')
 
     ###########################################################################
     ### Generate checks on pathes to all sinks
     ###########################################################################
     def generate_unit_tests_pathes_to_sinks(self):
+        count = 0
         pathes = self.graph_all_paths_to_sinks()
         for path in pathes:
-            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    std::cout << "Check path:')
+            self.generate_line_separator(0, ' ', 80, '-')
+            self.fd.write('TEST(' + self.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
+            count += 1
+            self.fd.write('    LOGD("===========================================\\n");\n')
+            self.fd.write('    LOGD("Check path:')
             for c in path:
                 self.fd.write(' ' + c)
-            self.fd.write('" << std::endl;\n')
-            self.fd.write('    std::cout << "===========================================" << std::endl;\n')
-            self.fd.write('    fsm.reset();')
+            self.fd.write('\\n");\n')
+            self.fd.write('    LOGD("===========================================\\n");\n')
+            self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
@@ -715,40 +738,29 @@ class Parser(object):
                         self.fd.write(' // If ' + guard)
                     self.fd.write('\n')
                 if (i == len(path) - 2):
-                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
-                    self.fd.write('    std::cout << "Current state: " << fsm.c_str() << std::endl;\n')
+                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n\n')
+                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
+            self.fd.write('}\n\n')
 
     ###########################################################################
     ### Generate the main function doing unit tests
     ###########################################################################
     def generate_unit_tests_main_function(self, filename):
-        self.fd.write(self.extra_code.unit_tests)
-        self.fd.write('\n')
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -I../../tool -DFSM_DEBUG ' + os.path.basename(filename) + ' `pkg-config --cflags --libs gtest gmock`')
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -I../include -DFSM_DEBUG ' + os.path.basename(filename) + ' `pkg-config --cflags --libs gtest gmock`')
         self.fd.write('int main(int argc, char *argv[])\n{\n')
         self.fd.write('    // The following line must be executed to initialize Google Mock\n')
         self.fd.write('    // (and Google Test) before running the tests.\n')
         self.fd.write('    ::testing::InitGoogleMock(&argc, argv);\n')
         self.fd.write('    return RUN_ALL_TESTS();\n')
         self.fd.write('}\n\n')
-
-        self.fd.write('// FIXME Generer plusieurs tests !!!!\n')
-        self.fd.write('TEST(Dico, LoadEmptyFile)\n{\n')
-        self.generate_unit_tests_macro()
-        self.generate_unit_tests_check_initial_state()
-        self.generate_unit_tests_check_cycles()
-        self.generate_unit_tests_pathes_to_sinks()
-
-        self.fd.write('    std::cout << "Unit test done with success" << std::endl;\n\n')
-        self.fd.write('}\n')
 
     ###########################################################################
     ### Code generator: Add an example of how using this state machine. It
@@ -763,6 +775,10 @@ class Parser(object):
         self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
         self.generate_unit_tests_header()
         self.generate_unit_tests_main_function(filename)
+        self.generate_unit_tests_check_initial_state()
+        self.generate_unit_tests_check_cycles()
+        self.generate_unit_tests_pathes_to_sinks()
+        self.generate_unit_tests_footer()
         self.fd.close()
 
     ###########################################################################
@@ -1056,7 +1072,7 @@ class Parser(object):
     ###########################################################################
     ### Remove 'xxx in the text and add some spaces for the indetation
     ###########################################################################
-    def truncate(self, txt, d, spaces):
+    def truncate(self, txt, d, spaces=''):
         res = txt[txt.find(d) + len(d):].lstrip()
         if res == '':
             return res
