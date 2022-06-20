@@ -355,11 +355,12 @@ class Parser(object):
         if hpp:
             self.fd.write('#ifndef ' + self.class_name.upper() + '_HPP\n')
             self.fd.write('#  define ' + self.class_name.upper() + '_HPP\n\n')
-            self.fd.write('#  include "StateMachine.hpp"\n\n')
-            self.fd.write(self.extra_code.header)
+            self.fd.write('#  include "StateMachine.hpp"\n')
         else:
-            self.fd.write('#include "StateMachine.hpp"\n\n')
-            self.fd.write(self.extra_code.header)
+            self.fd.write('#include "StateMachine.hpp"\n')
+        self.fd.write(self.extra_code.header)
+        if self.extra_code.header != '':
+            self.fd.write('\n')
 
     ###########################################################################
     ### Code generator: add the footer file.
@@ -553,9 +554,7 @@ class Parser(object):
                 self.fd.write('    void onEnteringState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
-                self.fd.write('        ' + state.entering)
-                if state.entering[-2] != '}':
-                    self.fd.write(';\n')
+                self.fd.write(state.entering)
                 self.fd.write('    }\n\n')
 
             if state.leaving != '':
@@ -563,7 +562,7 @@ class Parser(object):
                 self.fd.write('    void onLeavingState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
-                self.fd.write('        ' + state.leaving + ';\n')
+                self.fd.write(state.leaving)
                 self.fd.write('    }\n\n')
 
     ###########################################################################
@@ -1053,9 +1052,11 @@ class Parser(object):
         # Update state fields
         state = self.graph.nodes[name]['data']
         if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
-            state.entering += ' '.join(self.tokens[4:])
+            state.entering += '        '
+            state.entering += ' '.join(self.tokens[4:]) + ';\n'
         elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
-            state.leaving += ' '.join(self.tokens[4:])
+            state.leaving += '        '
+            state.leaving += ' '.join(self.tokens[4:]) + ';\n'
         elif what == 'comment':
             state.comment += ' '.join(self.tokens[4:])
         # 'on event' is not sugar syntax to a real transition: since it disables
