@@ -2,23 +2,16 @@
 ' skin rose
 ' hide empty description
 
-'header #include <qq>
-'footer ffffffff
-'init init
-'code private:
-'code int foo();
-'test tttttttt
-'test aaaa
-
 [*] --> IDLE
 
 IDLE --> SCAN_PARKING_SPOTS : turning indicator [ !isParked() ]\n--\nm_fsm_scan.reset()
 IDLE --> COMPUTE_LEAVING_TRAJECTORY : turning indicator [ isParked() ]
 
-SCAN_PARKING_SPOTS --> COMPUTE_ENTERING_TRAJECTORY : [ m_fsm_scan.status() == PARKING_SLOT_FOUND ]
-SCAN_PARKING_SPOTS --> TRAJECTORY_DONE : [ m_fsm_scan.status() == PARKING_SLOT_NOT_FOUND ]
-SCAN_PARKING_SPOTS --> SCAN_PARKING_SPOTS : [ m_fsm_scan.status() == PARKING_SEARCHING ]
-SCAN_PARKING_SPOTS : activity / m_fsm_scan.update(dt)
+SCAN_PARKING_SPOTS --> COMPUTE_ENTERING_TRAJECTORY : [ m_fsm_scan.status() == TODO::Status::PARKING_SLOT_FOUND ]
+SCAN_PARKING_SPOTS --> TRAJECTORY_DONE : [ m_fsm_scan.status() == TODO::Status::PARKING_SLOT_NOT_FOUND ]
+SCAN_PARKING_SPOTS --> SCAN_PARKING_SPOTS
+' : [ m_fsm_scan.status() == TODO::Status::PARKING_SEARCHING ]
+SCAN_PARKING_SPOTS : on update / m_fsm_scan.update(dt)
 
 COMPUTE_ENTERING_TRAJECTORY --> DRIVE_ALONG_TRAJECTORY: [ hasTrajectory() ]
 COMPUTE_ENTERING_TRAJECTORY --> IDLE: [ !canPark() ]
@@ -27,15 +20,49 @@ COMPUTE_ENTERING_TRAJECTORY : entering / computeTrajectoryEnteringSlot()
 COMPUTE_LEAVING_TRAJECTORY --> TRAJECTORY_DONE : [ !hasTrajectory() ]
 COMPUTE_LEAVING_TRAJECTORY : entering / computeTrajectoryLeavingSlot()
 
-DRIVE_ALONG_TRAJECTORY --> TRAJECTORY_DONE : [ !drive ]
-DRIVE_ALONG_TRAJECTORY : activity / driveAlongTrajectory()
+DRIVE_ALONG_TRAJECTORY --> TRAJECTORY_DONE : [ !canDrive() ]
+DRIVE_ALONG_TRAJECTORY : on update / driveAlongTrajectory()
 
 TRAJECTORY_DONE --> IDLE
-TRAJECTORY_DONE : entering / setRefSpeed(0.0f)
-TRAJECTORY_DONE : entering / turning_indicator(false, false)
+TRAJECTORY_DONE : entering / m_car.setRefSpeed(0.0f)
+TRAJECTORY_DONE : entering / m_car.turning_indicator(false, false)
 
 COMPUTE_ENTERING_TRAJECTORY --> TRAJECTORY_DONE : [ !hasTrajectory() ]
 
 COMPUTE_LEAVING_TRAJECTORY --> DRIVE_ALONG_TRAJECTORY: [ hasTrajectory() ]
+
+'header #  include "Vehicle/Vehicle.hpp"
+'code private:
+'code 
+'code     inline bool isParked() const
+'code     {
+'code         return false; // FIXME: not yet implemented
+'code     }
+'code 
+'code     inline bool hasTrajectory() const
+'code     {
+'code         return m_car.hasTrajectory();
+'code     }
+'code 
+'code     inline bool canDrive(float const dt) const
+'code     {
+'code         return m_car.updateTrajectory(dt);
+'code     }
+'code 
+'code     inline void computeTrajectoryEnteringSlot()
+'code     {
+'code         /*return */ m_car.park(m_parking, true);
+'code     }
+'code 
+'code     inline void computeTrajectoryLeavingSlot()
+'code     {
+'code         /*return */ m_car.park(m_parking, false);
+'code     }
+'code 
+'code private:
+'code 
+'code     SelfParkingCar& m_car;
+'code     Parking m_parking;
+'code     m_fsm_scan;
 
 @enduml
