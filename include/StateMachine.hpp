@@ -192,7 +192,7 @@ public:
     //--------------------------------------------------------------------------
     //! \brief Restore the state machin to its initial state.
     //--------------------------------------------------------------------------
-    inline void reset()
+    inline void start()
     {
         m_current_state = m_initial_state;
         std::queue<Transition const*> empty;

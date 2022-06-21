@@ -477,9 +477,9 @@ class Parser(object):
     ###########################################################################
     def generate_reset(self):
         self.generate_method_comment('Reset the state machine.')
-        self.fd.write('    void reset()\n')
+        self.fd.write('    void start()\n')
         self.fd.write('    {\n')
-        self.fd.write('        StateMachine::reset();\n')
+        self.fd.write('        StateMachine::start();\n')
         self.fd.write(self.extra_code.init)
         self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
         self.fd.write('    }\n\n')
@@ -637,7 +637,7 @@ class Parser(object):
         self.fd.write('    LOGD("===============================================\\n");\n')
         self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
         self.generate_unit_tests_assertions_initial_state()
-        self.fd.write('    fsm.reset();\n')
+        self.fd.write('\n    fsm.start();\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
 
@@ -661,7 +661,7 @@ class Parser(object):
 
             # Reset the state machine and print the guard supposed to reach this state
             self.fd.write('    ' + self.class_name + ' ' + 'fsm;')
-            # self.fd.write('    fsm.reset();')
+            self.fd.write('    fsm.start();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
@@ -730,6 +730,7 @@ class Parser(object):
             self.fd.write('\\n");\n')
             self.fd.write('    LOGD("===========================================\\n");\n')
             self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
+            self.fd.write('    fsm.start();')
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
