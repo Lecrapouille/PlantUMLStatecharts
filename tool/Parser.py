@@ -912,9 +912,12 @@ class Parser(object):
             if e.name != '':
                 return
 
+        cycle = list(nx.simple_cycles(self.graph))
+        if len(cycle) == 0:
+            self.warning('The state machine shall have at least one event.')
+            return
         str = ''
-        cycle = list(nx.simple_cycles(self.graph))[0]
-        for c in cycle:
+        for c in cycle[0]:
             str += ' ' + c
         self.warning('The state machine shall have at least one event to prevent infinite loop. ' +
                      'For example:' + str)
