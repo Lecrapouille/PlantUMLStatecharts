@@ -192,6 +192,8 @@ class Parser(object):
         self.final_state = ''
         # Extra C++ code
         self.extra_code = ExtraCode()
+        # Generate C++ warnings when missformed state machine is detected
+        self.warnings = ''
 
     ###########################################################################
     ### Reset states
@@ -206,6 +208,7 @@ class Parser(object):
         self.initial_state = ''
         self.final_state = ''
         self.extra_code = ExtraCode()
+        self.warnings = ''
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
@@ -218,6 +221,7 @@ class Parser(object):
     ### Print a warning message
     ###########################################################################
     def warning(self, msg):
+        self.warnings += msg
         print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
 
     ###########################################################################
@@ -367,6 +371,8 @@ class Parser(object):
     ### TODO include or insert custom footer like done with flex/bison
     ###########################################################################
     def generate_footer(self, hpp):
+        if self.warnings != '':
+            self.fd.write('#warning "' + self.warnings + '"\n\n')
         self.fd.write(self.extra_code.footer)
         if hpp:
             self.fd.write('#endif // ' + self.class_name.upper() + '_HPP')
@@ -884,9 +890,8 @@ class Parser(object):
         cycle = list(nx.simple_cycles(self.graph))[0]
         for c in cycle:
             str += ' ' + c
-        self.warning('The state machine shall have at least one event to prevent infinite loop.'
-                     + '\n   For example:' + str)
-
+        self.warning('The state machine shall have at least one event to prevent infinite loop. ' +
+                     'For example:' + str)
     ###########################################################################
     ### Verify for each state if transitions are dereminist.
     ### Case 1: each state having more than 1 transition in where one transition
@@ -903,10 +908,10 @@ class Parser(object):
             for d in out:
                 tr = self.graph[state][d]['data']
                 if (tr.event.name == '') and (tr.guard == ''):
-                    self.warning('The state ' + state + ' has an issue with its transitions: it has'
-                                 ' several possible ways\n   while the way to state ' + d +
-                                 ' is always true and therefore will be always a candidate and transition'
-                                 ' to other states is\n   non determinist.')
+                    self.warning('The state ' + state + ' has an issue with its transitions: it has' +
+                                 ' several possible ways while the way to state ' + d +
+                                 ' is always true and therefore will be always a candidate and transition' +
+                                 ' to other states is non determinist.')
         # Case 2: TODO
 
     ###########################################################################
