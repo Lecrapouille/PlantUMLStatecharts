@@ -857,44 +857,35 @@ class Parser(object):
         code = ''
         for state in states:
             count = 0 # count number of ways
-            code = '\n        LOGD("[STATE ' + state +  '] Internal transition\\n");\n'
             for dest in list(self.graph.neighbors(state)):
                 tr = self.graph[state][dest]['data']
                 s = self.state_name(state)
                 d = self.state_name(dest)
+
                 if tr.guard != '':
                     code += '        if (onGuardingTransition' + s + '_' + d + '())\n'
-                    code += '        {\n'
-                    code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
-                    code += '            {\n'
-                    code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
-                    code += '                .guard = &' + self.class_name + '::onGuardingTransition' + s + '_' + d + ',\n'
-                    if tr.action != '':
-                        code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
-                    code += '            };\n'
-                    code += '            transition(&tr);\n'
-                    code += '            return ;\n'
-                    code += '        }\n'
-                elif tr.event.name == '':
-                    # Several destination states possible: not determinist !
-                    # We keep generating and add a C++ compilation warning.
+                elif tr.event.name == '': # Dummy event and dummy guard
                     if count == 1:
-                        code += '\n#warning "Badly formed state machine: missing guard here"\n'
-                        code += '        /* MISSING GUARD HERE */ {\n'
-                    else:
-                        code += '        {\n'
+                        code += '\n#warning "Missformed state machine: missing guard from state ' + s + ' to state ' + d + '"\n'
+                        code += '        /* MISSING GUARD: if (guard) */\n'
+                    elif count > 1:
+                        code += '\n#warning "Undeterminist State machine detected switching from state ' + s + ' to state ' + d + '"\n'
+
+                if tr.event.name == '' and state != self.initial_state:
+                    code += '        {\n'
+                    code += '            LOGD("[STATE ' + s +  '] Internal transition to state ' + d + '\\n");\n'
                     code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
                     code += '            {\n'
                     code += '                .destination = ' + self.enum_name + '::' + d + ',\n'
+                    if tr.guard != '':
+                        code += '                // .guard = &' + self.class_name + '::onGuardingTransition' + s + '_' + d + ',\n'
                     if tr.action != '':
                         code += '                .action = &' + self.class_name + '::onTransitioning' + s + '_' + d + ',\n'
                     code += '            };\n'
                     code += '            transition(&tr);\n'
                     code += '            return ;\n'
                     code += '        }\n'
-                else:
-                    code += '\n#warning "Undeterminist State machine detected switching to state ' + d + '"\n'
-                count += 1
+                    count += 1
             self.graph.nodes[state]['data'].entering += code
 
     ###########################################################################
