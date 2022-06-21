@@ -85,6 +85,7 @@ I added some syntax to help generate extra C++ code. They start with the `'` key
 so they will not produce syntax error when PlantUML is parsing the file but, on our side, we exploit them.
 - `'header` for adding code in the header of the file, before the class of the state machine. You can include other C++ files, create or define functions.
 - `'footer` for adding code in the footer of the file, after the class of the state machine.
+- `'param` are arguments to pass to the state machine C++ constructor. Commas are added. One argument by line.
 - `'init` is C++ code called by the constructor or bu the `reset()` function.
 - `'code` to allow you to add member variables or member functions.
 

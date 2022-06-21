@@ -147,6 +147,8 @@ class ExtraCode(object):
         self.header = ''
         # Add code on the footer of the code after the class definition.
         self.footer = ''
+        # Add argument to constructor
+        self.argvs = ''
         # Add code for the class constructor, reset.
         self.init = ''
         # Add member functions and member variables in the class.
@@ -465,7 +467,8 @@ class Parser(object):
     def generate_constructor(self):
         states = list(self.graph.nodes)
         self.generate_method_comment('Default constructor. Start from initial state and call it actions.')
-        self.fd.write('    ' + self.class_name + '() : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
+        self.fd.write('    ' + self.class_name + '(' + self.extra_code.argvs + ')\n')
+        self.fd.write('        : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
         self.fd.write('    {\n')
         self.generate_table_states(states)
         self.fd.write(self.extra_code.init)
@@ -1113,6 +1116,10 @@ class Parser(object):
             self.extra_code.header += self.truncate(self.line, self.tokens[0])
         elif self.tokens[0] == '\'footer':
             self.extra_code.footer += self.truncate(self.line, self.tokens[0])
+        elif self.tokens[0] == '\'param':
+            if self.extra_code.argvs != '':
+                self.extra_code.argvs += ', '
+            self.extra_code.argvs += self.truncate(self.line.strip(), self.tokens[0])
         elif self.tokens[0] == '\'init':
             self.extra_code.init += self.truncate(self.line, self.tokens[0], '        ')
         elif self.tokens[0] == '\'code':
