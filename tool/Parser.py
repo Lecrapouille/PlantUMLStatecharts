@@ -623,6 +623,7 @@ class Parser(object):
         #    if s.leaving != '':
         #        self.fd.write('    MOCK_METHOD(void, ' + s.leaving + ', (), (override));\n')
         self.fd.write('};\n\n')
+
     ###########################################################################
     ### Generate the footer for the unit test file
     ###########################################################################
@@ -700,7 +701,6 @@ class Parser(object):
                         self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
                         self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
 
                 # External event: print the name of the event + its guard
                 tr = self.graph[cycle[i]][cycle[i+1]]['data']
@@ -721,7 +721,6 @@ class Parser(object):
                         self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                         self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
-                        self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
@@ -729,7 +728,6 @@ class Parser(object):
                     self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
             self.fd.write('}\n\n')
 
     ###########################################################################
@@ -742,6 +740,7 @@ class Parser(object):
             self.generate_line_separator(0, ' ', 80, '-')
             self.fd.write('TEST(' + self.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
             count += 1
+            # Print the path
             self.fd.write('    LOGD("===========================================\\n");\n')
             self.fd.write('    LOGD("Check path:')
             for c in path:
@@ -755,7 +754,9 @@ class Parser(object):
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
-            self.fd.write('\n\n')
+            self.fd.write('\n')
+
+            # Iterate on all nodes of the path
             for i in range(len(path) - 1):
                 event = self.graph[path[i]][path[i+1]]['data'].event
                 if event.name != '':
@@ -766,14 +767,14 @@ class Parser(object):
                     self.fd.write('\n')
                 if (i == len(path) - 2):
                     self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
+                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
+                    self.fd.write(self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
                     self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(path[i+1]) + ');\n')
+                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
+                    self.fd.write(self.state_name(path[i+1]) + ');\n')
                     self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
-                    self.fd.write('    LOGD("Assertions: ok\\n\\n");\n')
             self.fd.write('}\n\n')
 
     ###########################################################################
@@ -781,7 +782,9 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_main_function(self, filename):
         self.generate_function_comment('Compile with one of the following line:\n' +
-                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow -I../include -DFSM_DEBUG ' + os.path.basename(filename) + ' `pkg-config --cflags --libs gtest gmock`')
+                                       '//! g++ --std=c++14 -Wall -Wextra -Wshadow ' +
+                                       '-I../../include -DFSM_DEBUG ' + os.path.basename(filename) +
+                                       ' `pkg-config --cflags --libs gtest gmock`')
         self.fd.write('int main(int argc, char *argv[])\n{\n')
         self.fd.write('    // The following line must be executed to initialize Google Mock\n')
         self.fd.write('    // (and Google Test) before running the tests.\n')
@@ -1054,7 +1057,7 @@ class Parser(object):
 
     ###########################################################################
     ### Parse the following plantUML code and store information of the analyse:
-    ### FIXME: limitation only one State : State : on event [ guard ] / action
+    ### FIXME: limitation only one "State : on event [ guard ] / action" allowed!
     ###    State : entry / action
     ###    State : exit / action
     ###    State : on event [ guard ] / action
@@ -1099,7 +1102,8 @@ class Parser(object):
             self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
 
     ###########################################################################
-    ### Remove 'xxx in the text and add some spaces for the indetation
+    ### Helper function for removing "'xxx" in the text and add some spaces
+    ### for the indentation.
     ###########################################################################
     def truncate(self, txt, d, spaces=''):
         res = txt[txt.find(d) + len(d):].lstrip()
@@ -1108,8 +1112,23 @@ class Parser(object):
         return spaces + res
 
     ###########################################################################
-    ### Some no PlantUML syntax interpreted as comment but which help us in
-    ### holding C++ code.
+    ### Extend the PlantUML single-line comments to add extra commands to help
+    ### generating C++ code. For examples:
+    ### Add code before and after the generated code:
+    ###   'header #include <foo>
+    ###   'footer class Foo {
+    ###   'footer private: ...
+    ###   'footer };
+    ### Add extra member functions or member variables:
+    ###   'code private:
+    ###   'code void extra_method();
+    ### Add extra arguments to the constructor:
+    ###   'param Foo foo
+    ###   'param Bar bar
+    ### Add code in the constructor
+    ###   'init bar.x = 42;
+    ### Unit tests:
+    ###   'test ...
     ###########################################################################
     def parse_extra_code(self):
         if self.tokens[0] == '\'header':
@@ -1135,6 +1154,8 @@ class Parser(object):
     ### been be better while for parsing PlantUML this is fine. In fact, I did
     ### not initially though that splitting by spaces has negative impact on
     ### the C++ code for the guard and actions.
+    ### FIXME (\w)\s*->\s*(\w)\s*:\s*([^\[]*)\s(\[.*\])\s*\/(.*)
+    ### A -> B: event bar [ sdsd() && foo || foo[0]]   / sdsd
     ###########################################################################
     def parse_line(self):
         self.nb_tokens = 0
@@ -1212,11 +1233,11 @@ class Parser(object):
     ### Entry point for translating a plantUML file into a C++ source file.
     ### umlfile: path to the plantuml file.
     ### cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
-    ### classname: postfixe name for the state machine name.
+    ### classname: postfix name for the state machine name.
     ###########################################################################
     def translate(self, umlfile, cpp_or_hpp, classname):
         if not os.path.isfile(umlfile):
-            print('File path {} does not exist. Exiting...'.format(umlfile))
+            print('File path ' + umlfile + ' does not exist. Exiting!')
             sys.exit(-1)
 
         self.parse_plantuml_file(umlfile, cpp_or_hpp, classname)
