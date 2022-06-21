@@ -4,7 +4,13 @@ https://github.com/cotestatnt/YA_FSM
 - 2 transitions avec evenement pas gérés: Shall use nx.MultiDiGraph() but
   our transition tables does not manage it.
 - printf("\\n")
-- Use gtest and check if guards and actions are called.
-- Couper les tests unitiaires en plusieurs petits tests.
 - Meilleur parsing: les "::" sont mis a " : : "
 - Gumbal: ko passer gumballs au constructur puis a sa variable member puis passer les bonnes valeurs pour les TU
+- Ordre entre guard et event: event devrait etre plus prioritaires sur guards.
+  Exemple: D <==event== A =[guard]=> B: quand on rentre dans A si event alors passer a D mais actuellement on va d'abord tester la garde et passer en B
+- FixErrneous2: initial state peut etre B ou C ou D.
+- Constructueur => ne pas lancer onEnteringStateCONSTRUCTOR a cause des tests unitaires
+- TU: faire
+pour tous les guardes: count = 0
+pour tout le cycle ou path faire count++
+- TU mocker les actions

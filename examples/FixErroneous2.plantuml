@@ -1,0 +1,12 @@
+@startuml
+skin rose
+
+[*] -> A
+A -> B : [ guard1() ]
+A --> C : [ guard2() ]
+A --> D : event
+
+'code virtual bool guard1() { return true; }
+'code virtual bool guard2() { return true; }
+
+@enduml
