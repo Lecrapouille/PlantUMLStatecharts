@@ -345,6 +345,12 @@ class Parser(object):
         self.generate_comment(4, ' ', comment, '-')
 
     ###########################################################################
+    ### Identation.
+    ###########################################################################
+    def indent(self, count):
+        self.fd.write(' ' * 4 * count)
+
+    ###########################################################################
     ### You can add here your copyright, license ...
     ###########################################################################
     def generate_common_header(self):
@@ -385,15 +391,15 @@ class Parser(object):
     def generate_state_enums(self):
         self.generate_function_comment('States of the state machine.')
         self.fd.write('enum ' + self.enum_name + '\n{\n')
-        self.fd.write('    // Client states:\n')
+        self.indent(1), self.fd.write('// Client states:\n')
         for state in list(self.graph.nodes):
-            self.fd.write('    ' + self.state_name(state) + ',')
+            self.indent(1), self.fd.write(self.state_name(state) + ',')
             comment = self.graph.nodes[state]['data'].comment
             if comment != '':
                 self.fd.write(' //!< ' + comment)
             self.fd.write('\n')
-        self.fd.write('    // Mandatory internal states:\n')
-        self.fd.write('    IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
+        self.indent(1), self.fd.write('// Mandatory internal states:\n')
+        self.indent(1), self.fd.write('IGNORING_EVENT, CANNOT_HAPPEN, MAX_STATES\n')
         self.fd.write('};\n\n')
 
     ###########################################################################
@@ -401,16 +407,13 @@ class Parser(object):
     ###########################################################################
     def generate_stringify_function(self):
         self.generate_function_comment('Convert enum states to human readable string.')
-        self.fd.write('static inline const char* stringify(' + self.enum_name + ' const state)\n')
-        self.fd.write('{\n')
-        self.fd.write('    static const char* s_states[] =\n')
-        self.fd.write('    {\n')
+        self.fd.write('static inline const char* stringify(' + self.enum_name + ' const state)\n{\n')
+        self.indent(1), self.fd.write('static const char* s_states[] =\n')
+        self.indent(1), self.fd.write('{\n')
         for state in list(self.graph.nodes):
-            self.fd.write('        [' + self.enum_name + '::' + self.state_name(state) + '] = "' + state + '",\n')
-        self.fd.write('    };\n')
-        self.fd.write('\n')
-        self.fd.write('    return s_states[state];\n')
-        self.fd.write('};\n\n')
+            self.indent(2), self.fd.write('[' + self.enum_name + '::' + self.state_name(state) + '] = "' + state + '",\n')
+        self.indent(1), self.fd.write('};\n\n')
+        self.indent(1), self.fd.write('return s_states[state];\n};\n\n')
 
     ###########################################################################
     ### Convert the state name
@@ -433,7 +436,8 @@ class Parser(object):
                 'activity' : 'doActivityState',
                 'onevent' : 'onEventState', # FIXME missing onEventXXXState once dealing with multiple events
         }
-        self.fd.write('            .' + what +' = &' + self.class_name + '::' + dict[what] + self.state_name(state) + ',\n')
+        self.indent(3)
+        self.fd.write('.' + what +' = &' + self.class_name + '::' + dict[what] + self.state_name(state) + ',\n')
 
     ###########################################################################
     ### Code generator: add the state machine constructor method.
@@ -448,18 +452,18 @@ class Parser(object):
             if (s.entering == '') and (s.leaving == ''):
                 continue
 
-            self.fd.write('        m_states[' + self.enum_name + '::' + self.state_name(s.name) + '] =\n')
-            self.fd.write('        {\n')
+            self.indent(2), self.fd.write('m_states[' + self.enum_name + '::' + self.state_name(s.name) + '] =\n')
+            self.indent(2), self.fd.write('{\n')
             if s.entering != '':
                 self.generate_pointer_function('entering', s.name)
             if s.leaving != '':
                 self.generate_pointer_function('leaving', s.name)
             if s.activity != '':
                 self.generate_pointer_function('activity', s.name)
-            self.fd.write('        };\n')
+            self.indent(2), self.fd.write('};\n')
             empty = False
         if empty:
-            self.fd.write('        // Note: no table of states created since no state will do actions!\n')
+            self.indent(2), self.fd.write('// Note: no table of states created since no state will do actions!\n')
 
     ###########################################################################
     ### Code generator: add the state machine constructor method.
@@ -467,25 +471,25 @@ class Parser(object):
     def generate_constructor(self):
         states = list(self.graph.nodes)
         self.generate_method_comment('Default constructor. Start from initial state and call it actions.')
-        self.fd.write('    ' + self.class_name + '(' + self.extra_code.argvs + ')\n')
-        self.fd.write('        : StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
-        self.fd.write('    {\n')
+        self.indent(1), self.fd.write(self.class_name + '(' + self.extra_code.argvs + ')\n')
+        self.indent(2), self.fd.write(': StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
+        self.indent(1), self.fd.write('{\n')
         self.generate_table_states(states)
         self.fd.write(self.extra_code.init)
-        self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
-        self.fd.write('    }\n\n')
+        self.indent(2), self.fd.write('onEnteringState' + self.state_name(self.initial_state) + '();\n')
+        self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Code generator: add the state machine reset method.
     ###########################################################################
     def generate_reset(self):
         self.generate_method_comment('Reset the state machine.')
-        self.fd.write('    void start()\n')
-        self.fd.write('    {\n')
-        self.fd.write('        StateMachine::start();\n')
+        self.indent(1), self.fd.write('void start()\n')
+        self.indent(1), self.fd.write('{\n')
+        self.indent(2), self.fd.write('StateMachine::start();\n')
         self.fd.write(self.extra_code.init)
-        self.fd.write('        onEnteringState' + self.state_name(self.initial_state) + '();\n')
-        self.fd.write('    }\n\n')
+        self.indent(2), self.fd.write('onEnteringState' + self.state_name(self.initial_state) + '();\n')
+        self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Code generator: add all methods associated with external events.
@@ -496,33 +500,32 @@ class Parser(object):
                 continue
 
             self.generate_method_comment('External event.')
-            self.fd.write('    ' + event.header() + '\n')
-            self.fd.write('    {\n')
-            self.fd.write('        LOGD("[EVENT %s]\\n", __func__);\n\n')
-            self.fd.write('        static Transitions s_transitions =\n')
-            self.fd.write('        {\n')
+            self.indent(1), self.fd.write(event.header() + '\n')
+            self.indent(1), self.fd.write('{\n')
+            self.indent(2), self.fd.write('LOGD("[EVENT %s]\\n", __func__);\n\n')
+            self.indent(2), self.fd.write('static Transitions s_transitions =\n')
+            self.indent(2), self.fd.write('{\n')
             for origin, destination in arcs:
                 tr = self.graph[origin][destination]['data']
-                self.fd.write('            {\n')
-                self.fd.write('                ' + self.enum_name + '::' + self.state_name(origin) + ',\n')
-                self.fd.write('                {\n')
-                self.fd.write('                    ' + self.enum_name + '::' + self.state_name(destination) + ',\n')
+                self.indent(3), self.fd.write('{\n')
+                self.indent(3), self.fd.write(self.enum_name + '::' + self.state_name(origin) + ',\n')
+                self.indent(3), self.fd.write('{\n')
+                self.indent(5), self.fd.write(self.enum_name + '::' + self.state_name(destination) + ',\n')
                 if tr.guard != '':
-                    self.fd.write('                    &' + self.class_name + '::onGuardingTransition')
+                    self.indent(5), self.fd.write('&' + self.class_name + '::onGuardingTransition')
                     self.fd.write(self.state_name(origin) + '_' + self.state_name(destination) + ',\n')
                 else:
-                    self.fd.write('                    nullptr,\n')
+                    self.indent(5), self.fd.write('nullptr,\n')
                 if tr.action != '':
-                    self.fd.write('                    &' + self.class_name + '::onTransitioning')
+                    self.indent(5), self.fd.write('&' + self.class_name + '::onTransitioning')
                     self.fd.write(self.state_name(origin) + '_' + self.state_name(destination) + ',\n')
                 else:
-                    self.fd.write('                    nullptr,\n')
-                self.fd.write('                },\n')
-                self.fd.write('            },\n')
-            self.fd.write('        };\n')
-            self.fd.write('\n')
-            self.fd.write('        transition(s_transitions);\n')
-            self.fd.write('    }\n\n')
+                    self.indent(5), self.fd.write('nullptr,\n')
+                self.indent(4), self.fd.write('},\n')
+                self.indent(3), self.fd.write('},\n')
+            self.indent(2), self.fd.write('};\n\n')
+            self.indent(2), self.fd.write('transition(s_transitions);\n')
+            self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Code generator: Transitions reactions.
@@ -533,21 +536,21 @@ class Parser(object):
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
                 self.generate_method_comment('Guard the transition from state ' + origin  + ' to state ' + destination + '.')
-                self.fd.write('    MOCKABLE bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
-                self.fd.write('    {\n')
-                self.fd.write('        const bool guard = (' + tr.guard + ');\n')
-                self.fd.write('        LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
-                self.fd.write('             (guard ? "true" : "false"));\n')
-                self.fd.write('        return guard;\n')
-                self.fd.write('    }\n\n')
+                self.indent(1), self.fd.write('MOCKABLE bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
+                self.indent(1), self.fd.write('{\n')
+                self.indent(2), self.fd.write('const bool guard = (' + tr.guard + ');\n')
+                self.indent(2), self.fd.write('LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
+                self.indent(3), self.fd.write('(guard ? "true" : "false"));\n')
+                self.indent(2), self.fd.write('return guard;\n')
+                self.indent(1), self.fd.write('}\n\n')
 
             if tr.action != '':
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
-                self.fd.write('    MOCKABLE void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
-                self.fd.write('    {\n')
-                self.fd.write('        LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
-                self.fd.write('        ' + tr.action + ';\n')
-                self.fd.write('    }\n\n')
+                self.indent(1), self.fd.write('MOCKABLE void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
+                self.indent(1), self.fd.write('{\n')
+                self.indent(2), self.fd.write('LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
+                self.indent(2), self.fd.write(tr.action + ';\n')
+                self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Code generator: States reactions.
@@ -560,19 +563,19 @@ class Parser(object):
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
-                self.fd.write('    MOCKABLE void onEnteringState' + self.state_name(state.name) + '()\n')
-                self.fd.write('    {\n')
-                self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
+                self.indent(1), self.fd.write('MOCKABLE void onEnteringState' + self.state_name(state.name) + '()\n')
+                self.indent(1), self.fd.write('{\n')
+                self.indent(2), self.fd.write('LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.entering)
-                self.fd.write('    }\n\n')
+                self.indent(1), self.fd.write('}\n\n')
 
             if state.leaving != '':
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
-                self.fd.write('    MOCKABLE void onLeavingState' + self.state_name(state.name) + '()\n')
-                self.fd.write('    {\n')
-                self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
+                self.indent(1), self.fd.write('MOCKABLE void onLeavingState' + self.state_name(state.name) + '()\n')
+                self.indent(1), self.fd.write('{\n')
+                self.indent(2), self.fd.write('LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.leaving)
-                self.fd.write('    }\n\n')
+                self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Code generator: add the state machine class and all its methods.
@@ -642,7 +645,7 @@ class Parser(object):
         self.fd.write(('\n          || fsm.state() == ' + self.enum_name + '::').join(l))
         self.fd.write(');\n')
         # List of possible state strings
-        self.fd.write('    ASSERT_TRUE(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
+        self.indent(1), self.fd.write('ASSERT_TRUE(strcmp(fsm.c_str(), "' + neighbors[0] + '") == 0')
         for n in neighbors[1:]:
             self.fd.write('\n          || strcmp(fsm.c_str(), "' + n + '") == 0')
         self.fd.write(');\n')
@@ -653,11 +656,11 @@ class Parser(object):
     def generate_unit_tests_check_initial_state(self):
         self.generate_line_separator(0, ' ', 80, '-')
         self.fd.write('TEST(' + self.class_name + 'Tests, TestInitialSate)\n{\n')
-        self.fd.write('    LOGD("===============================================\\n");\n')
-        self.fd.write('    LOGD("Check initial state after constructor or reset.\\n");\n')
-        self.fd.write('    LOGD("===============================================\\n");\n')
-        self.fd.write('    ' + self.class_name + ' ' + 'fsm; // Not mocked !\n\n')
-        self.fd.write('\n    fsm.start();\n')
+        self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
+        self.indent(1), self.fd.write('LOGD("Check initial state after constructor or reset.\\n");\n')
+        self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
+        self.indent(1), self.fd.write(self.class_name + ' ' + 'fsm; // Not mocked !\n')
+        self.indent(1), self.fd.write('fsm.start();\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
 
@@ -672,16 +675,16 @@ class Parser(object):
             self.fd.write('TEST(' + self.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
             count += 1
             # Print the cycle
-            self.fd.write('    LOGD("===========================================\\n");\n')
-            self.fd.write('    LOGD("Check cycle: [*]')
+            self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
+            self.indent(1), self.fd.write('LOGD("Check cycle: [*]')
             for c in cycle:
                 self.fd.write(' ' + c)
             self.fd.write('\\n");\n')
-            self.fd.write('    LOGD("===========================================\\n");\n')
+            self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.fd.write('    Mock' + self.class_name + ' ' + 'fsm;')
-            self.fd.write('    fsm.start();')
+            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;')
+            self.indent(1), self.fd.write('fsm.start();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
@@ -693,20 +696,21 @@ class Parser(object):
                 if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
                     tr = self.graph[cycle[i]][cycle[i]]['data']
                     if tr.event.name != '':
-                        self.fd.write('    LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
-                        self.fd.write('    fsm.' + tr.event.caller() + ';')
+                        self.indent(1), self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+                        self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
                         if tr.guard != '':
                             self.fd.write(' // If ' + tr.guard)
                         self.fd.write('\n')
-                        self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                        self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
-                        self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
+                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i]) + ');\n')
+                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
 
                 # External event: print the name of the event + its guard
                 tr = self.graph[cycle[i]][cycle[i+1]]['data']
                 if tr.event.name != '':
-                    self.fd.write('    LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
-                    self.fd.write('    fsm.' + tr.event.caller() + ';')
+                    self.indent(1)
+                    self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
                     if tr.guard != '':
                         self.fd.write(' // If ' + tr.guard)
                     self.fd.write('\n')
@@ -715,19 +719,19 @@ class Parser(object):
                     # Cycle of non external evants => malformed state machine
                     # I think this case is not good
                     if self.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
-                        self.fd.write('    #warning "Malformed state machine: unreachable destination state"\n\n')
+                        self.indent(1), self.fd.write('#warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
-                        self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                        self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
-                        self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
+                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
+                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
-                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.enum_name + '::' + self.state_name(cycle[i+1]) + ');\n')
+                    self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
             self.fd.write('}\n\n')
 
     ###########################################################################
@@ -741,16 +745,16 @@ class Parser(object):
             self.fd.write('TEST(' + self.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
             count += 1
             # Print the path
-            self.fd.write('    LOGD("===========================================\\n");\n')
-            self.fd.write('    LOGD("Check path:')
+            self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
+            self.indent(1), self.fd.write('LOGD("Check path:')
             for c in path:
                 self.fd.write(' ' + c)
             self.fd.write('\\n");\n')
-            self.fd.write('    LOGD("===========================================\\n");\n')
+            self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.fd.write('    Mock' + self.class_name + ' ' + 'fsm;')
-            self.fd.write('    fsm.start();')
+            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;')
+            self.indent(1), self.fd.write('fsm.start();')
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
                 self.fd.write(' // If ' + guard)
@@ -761,20 +765,20 @@ class Parser(object):
                 event = self.graph[path[i]][path[i+1]]['data'].event
                 if event.name != '':
                     guard = self.graph[path[i]][path[i+1]]['data'].guard
-                    self.fd.write('    fsm.' + event.caller() + ';')
+                    self.indent(1), self.fd.write('fsm.' + event.caller() + ';')
                     if guard != '':
                         self.fd.write(' // If ' + guard)
                     self.fd.write('\n')
                 if (i == len(path) - 2):
-                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
-                    self.fd.write(self.state_name(path[i+1]) + ');\n')
-                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
+                    self.indent(1), self.fd.write(self.state_name(path[i+1]) + ');\n')
+                    self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
-                    self.fd.write('    LOGD("Current state: %s\\n", fsm.c_str());\n')
-                    self.fd.write('    ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.enum_name + '::')
                     self.fd.write(self.state_name(path[i+1]) + ');\n')
-                    self.fd.write('    ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
+                    self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
             self.fd.write('}\n\n')
 
     ###########################################################################
@@ -786,10 +790,10 @@ class Parser(object):
                                        '-I../../include -DFSM_DEBUG ' + os.path.basename(filename) +
                                        ' `pkg-config --cflags --libs gtest gmock`')
         self.fd.write('int main(int argc, char *argv[])\n{\n')
-        self.fd.write('    // The following line must be executed to initialize Google Mock\n')
-        self.fd.write('    // (and Google Test) before running the tests.\n')
-        self.fd.write('    ::testing::InitGoogleMock(&argc, argv);\n')
-        self.fd.write('    return RUN_ALL_TESTS();\n')
+        self.indent(1), self.fd.write('// The following line must be executed to initialize Google Mock\n')
+        self.indent(1), self.fd.write('// (and Google Test) before running the tests.\n')
+        self.indent(1), self.fd.write('::testing::InitGoogleMock(&argc, argv);\n')
+        self.indent(1), self.fd.write('return RUN_ALL_TESTS();\n')
         self.fd.write('}\n\n')
 
     ###########################################################################
@@ -912,6 +916,7 @@ class Parser(object):
             str += ' ' + c
         self.warning('The state machine shall have at least one event to prevent infinite loop. ' +
                      'For example:' + str)
+
     ###########################################################################
     ### Verify for each state if transitions are dereminist.
     ### Case 1: each state having more than 1 transition in where one transition
