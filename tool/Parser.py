@@ -617,9 +617,11 @@ class Parser(object):
         self.generate_function_comment('Mocked state machine')
         self.fd.write('class Mock' + self.class_name + ' : public ' + self.class_name)
         self.fd.write('\n{\npublic:\n')
-        self.fd.write('// virtual ~Mock' + self.class_name + '() = default;\n')
-        #for g in self.guards:
-        #    self.fd.write('    MOCK_METHOD(bool, ' + g + ', (), (override));\n')
+        transitions = list(self.graph.edges)
+        for origin, destination in transitions:
+            tr = self.graph[origin][destination]['data']
+            if tr.guard != '':
+                self.fd.write('    MOCK_METHOD(bool, onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + ', (), (override));\n')
         #for s in self.states:
         #    if s.entering != '':
         #        self.fd.write('    MOCK_METHOD(void, ' + s.entering + ', (), (override));\n')
@@ -683,7 +685,7 @@ class Parser(object):
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;')
+            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
             self.indent(1), self.fd.write('fsm.start();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
@@ -753,7 +755,7 @@ class Parser(object):
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;')
+            self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
             self.indent(1), self.fd.write('fsm.start();')
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
