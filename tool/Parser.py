@@ -871,7 +871,7 @@ class Parser(object):
                     elif count > 1:
                         code += '\n#warning "Undeterminist State machine detected switching from state ' + s + ' to state ' + d + '"\n'
 
-                if tr.event.name == '' and state != self.initial_state:
+                if tr.event.name == '': # and state != self.initial_state:
                     code += '        {\n'
                     code += '            LOGD("[STATE ' + s +  '] Internal transition to state ' + d + '\\n");\n'
                     code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
