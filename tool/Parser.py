@@ -530,7 +530,7 @@ class Parser(object):
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
                 self.generate_method_comment('Guard the transition from state ' + origin  + ' to state ' + destination + '.')
-                self.fd.write('    bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
+                self.fd.write('    MOCKABLE bool onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        const bool guard = (' + tr.guard + ');\n')
                 self.fd.write('        LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
@@ -540,7 +540,7 @@ class Parser(object):
 
             if tr.action != '':
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
-                self.fd.write('    void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
+                self.fd.write('    MOCKABLE void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
                 self.fd.write('        ' + tr.action + ';\n')
@@ -557,7 +557,7 @@ class Parser(object):
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
-                self.fd.write('    void onEnteringState' + self.state_name(state.name) + '()\n')
+                self.fd.write('    MOCKABLE void onEnteringState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.entering)
@@ -565,7 +565,7 @@ class Parser(object):
 
             if state.leaving != '':
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
-                self.fd.write('    void onLeavingState' + self.state_name(state.name) + '()\n')
+                self.fd.write('    MOCKABLE void onLeavingState' + self.state_name(state.name) + '()\n')
                 self.fd.write('    {\n')
                 self.fd.write('        LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.leaving)
@@ -595,6 +595,7 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_header(self):
         self.generate_common_header()
+        self.fd.write('#define MOCKABLE virtual\n')
         self.fd.write('#include "' + self.class_name + '.hpp"\n')
         self.fd.write('#include <gmock/gmock.h>\n')
         self.fd.write('#include <gtest/gtest.h>\n')
@@ -603,6 +604,22 @@ class Parser(object):
         if self.extra_code.unit_tests != '':
             self.fd.write('\n')
 
+    ###########################################################################
+    ### Generate the mocked class
+    ###########################################################################
+    def generate_unit_tests_mocked_class(self):
+        self.generate_function_comment('Mocked state machine')
+        self.fd.write('class Mock' + self.class_name + ' : public ' + self.class_name)
+        self.fd.write('\n{\npublic:\n')
+        self.fd.write('// virtual ~Mock' + self.class_name + '() = default;\n')
+        #for g in self.guards:
+        #    self.fd.write('    MOCK_METHOD(bool, ' + g + ', (), (override));\n')
+        #for s in self.states:
+        #    if s.entering != '':
+        #        self.fd.write('    MOCK_METHOD(void, ' + s.entering + ', (), (override));\n')
+        #    if s.leaving != '':
+        #        self.fd.write('    MOCK_METHOD(void, ' + s.leaving + ', (), (override));\n')
+        self.fd.write('};\n\n')
     ###########################################################################
     ### Generate the footer for the unit test file
     ###########################################################################
@@ -635,8 +652,7 @@ class Parser(object):
         self.fd.write('    LOGD("===============================================\\n");\n')
         self.fd.write('    LOGD("Check initial state after constructor or reset.\\n");\n')
         self.fd.write('    LOGD("===============================================\\n");\n')
-        self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
-        self.generate_unit_tests_assertions_initial_state()
+        self.fd.write('    ' + self.class_name + ' ' + 'fsm; // Not mocked !\n\n')
         self.fd.write('\n    fsm.start();\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
@@ -660,7 +676,7 @@ class Parser(object):
             self.fd.write('    LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.fd.write('    ' + self.class_name + ' ' + 'fsm;')
+            self.fd.write('    Mock' + self.class_name + ' ' + 'fsm;')
             self.fd.write('    fsm.start();')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
             if guard != '':
@@ -729,7 +745,9 @@ class Parser(object):
                 self.fd.write(' ' + c)
             self.fd.write('\\n");\n')
             self.fd.write('    LOGD("===========================================\\n");\n')
-            self.fd.write('    ' + self.class_name + ' ' + 'fsm;\n\n')
+
+            # Reset the state machine and print the guard supposed to reach this state
+            self.fd.write('    Mock' + self.class_name + ' ' + 'fsm;')
             self.fd.write('    fsm.start();')
             guard = self.graph[path[0]][path[1]]['data'].guard
             if guard != '':
@@ -780,11 +798,12 @@ class Parser(object):
         filename = self.class_name + 'Tests.cpp'
         self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
         self.generate_unit_tests_header()
-        self.generate_unit_tests_main_function(filename)
+        self.generate_unit_tests_mocked_class()
         self.generate_unit_tests_check_initial_state()
         self.generate_unit_tests_check_cycles()
         self.generate_unit_tests_pathes_to_sinks()
         self.generate_unit_tests_footer()
+        self.generate_unit_tests_main_function(filename)
         self.fd.close()
 
     ###########################################################################
