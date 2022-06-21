@@ -329,7 +329,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         {
             LOGD("[FSM INTERNALS] Call the guard %s -> %s\n",
                  stringify(m_current_state), stringify(transition->destination));
-            guard_res = (reinterpret_cast<FSM*>(this)->*transition->guard)();
+            guard_res = (static_cast<FSM*>(this)->*transition->guard)();
         }
 
         if (!guard_res)
@@ -351,7 +351,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
             {
                 LOGD("[FSM INTERNALS] Call the transition %s -> %s action\n",
                      stringify(previous_state), stringify(transition->destination));
-                (reinterpret_cast<FSM*>(this)->*transition->action)();
+                (static_cast<FSM*>(this)->*transition->action)();
             }
 
             // Transitioning to a new state ?
@@ -363,7 +363,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                          stringify(previous_state));
 
                     // Do reactions when leaving the current state
-                    (reinterpret_cast<FSM*>(this)->*cst.leaving)();
+                    (static_cast<FSM*>(this)->*cst.leaving)();
                 }
 
                 if (nst.entering != nullptr)
@@ -372,7 +372,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                          stringify(transition->destination));
 
                     // Do reactions when entring into the new state
-                    (reinterpret_cast<FSM*>(this)->*nst.entering)();
+                    (static_cast<FSM*>(this)->*nst.entering)();
                 }
             }
             else
