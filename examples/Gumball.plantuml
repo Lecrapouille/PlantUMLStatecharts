@@ -1,9 +1,9 @@
 @startuml
 skin rose
 
-'code private:
-'code     int gumballs;
-'init     gumballs = 1;
+'[code] private:
+'[code]     int gumballs;
+'[init]     gumballs = 1;
 
 ' FIXME Passer gumballs en constructor + HasQuarter or NoQuarter
 [*] --> NoQuarter : [ gumballs > 0 ]

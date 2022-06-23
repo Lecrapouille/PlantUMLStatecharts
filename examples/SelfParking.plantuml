@@ -1,6 +1,6 @@
 @startuml
-' skin rose
-' hide empty description
+skin rose
+hide empty description
 
 [*] --> IDLE
 
@@ -33,34 +33,34 @@ COMPUTE_LEAVING_TRAJECTORY --> DRIVE_ALONG_TRAJECTORY: [ hasTrajectory() ]
 
 'header #  include "Vehicle/Vehicle.hpp"
 'code private:
-'code 
+'code
 'code     inline bool isParked() const
 'code     {
 'code         return false; // FIXME: not yet implemented
 'code     }
-'code 
+'code
 'code     inline bool hasTrajectory() const
 'code     {
 'code         return m_car.hasTrajectory();
 'code     }
-'code 
+'code
 'code     inline bool canDrive(float const dt) const
 'code     {
 'code         return m_car.updateTrajectory(dt);
 'code     }
-'code 
+'code
 'code     inline void computeTrajectoryEnteringSlot()
 'code     {
 'code         /*return */ m_car.park(m_parking, true);
 'code     }
-'code 
+'code
 'code     inline void computeTrajectoryLeavingSlot()
 'code     {
 'code         /*return */ m_car.park(m_parking, false);
 'code     }
-'code 
+'code
 'code private:
-'code 
+'code
 'code     SelfParkingCar& m_car;
 'code     Parking m_parking;
 'code     m_fsm_scan;

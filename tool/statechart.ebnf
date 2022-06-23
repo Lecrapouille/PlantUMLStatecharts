@@ -1,29 +1,52 @@
+// Lark grammar rules https://github.com/lark-parser/lark for parsing PlantUML statecharts
+// This file is based on the initial project:
 // https://github.com/thomedes/PlantUML-Lark-EBNF
 // https://stackoverflow.com/questions/65872693/how-can-i-split-a-rule-with-lark-ebnf
 
 start: "@startuml" "\n" state_diagram "@enduml" (WS|"\n"*)
-
 state_diagram: ( cpp_code | comment | skin | state_block | state_action | transition | "\n" )*
-skin: "skin" FREE_TEXT "\n"
+
+// Skin is a theme parameter, we do not care of it but since in newer version of PlantUML they
+// changed the default theme, we need to parse it and ignore it.
+skin: ("skin" | "hide") FREE_TEXT "\n"
+
+// This rule does not come from PlantUML syntax but we absue of the single-line comment
+// to add extra command for generating C++ code.
 cpp_code: "'" CPP_WHAT FREE_TEXT "\n"
 CPP_WHAT: "[header]" | "[footer]" | "[param]" | "[init]" | "[code]" | "[test]"
+
+// PlantUML single-line comment
 comment: "'" FREE_TEXT "\n"
 
+// Hierarchic State Machine: not managed yet!
 state_block: "state" STATE "{" "\n" state_diagram "}" "\n"
+
+// UML statecharts entry/leaving actions. I added alternative names
 ?state_action: state_entry | state_exit | state_event | state_comment
 state_entry: STATE ":" ("entry" | "entering") action "\n"
 state_exit: STATE ":" ("exit" | "leaving") action "\n"
+
+// Internal event
 state_event: STATE ":" ("on" | "event") event guard? action? "\n"
+
+// This is not from UML standard but just away to add comments in the generated C++ code.
+// Note: action? should be comment? but the rule is already used for PlantUML comment.
 state_comment: STATE ":" "comment" action? "\n"
 
+// UML transition: source -> destination : event [guard] / action
+// In which event, guard and action are optional.
 transition: STATE ARROW STATE (":" event? guard? action?)? "\n"
-ARROW: ("->" | "-->" | "<-" | "<--")
 
-FREE_TEXT: /.+/
-STATE: "[*]" | CNAME
+// Event syntax can be 'foo bar toto(param1, param2)' tokens will be concat
 event: CNAME+ ( /\([^)]*\)/ )?
+// Guard syntax is [ boolean C++ logic ]
 guard : /\[.+\]/
+// Action syntax is / C++ logic
 action: /\/.+/
+
+STATE: "[*]" | CNAME
+ARROW: ("->" | "-->" | "<-" | "<--")
+FREE_TEXT: /.+/
 
 %import common.ESCAPED_STRING
 %import common.CNAME

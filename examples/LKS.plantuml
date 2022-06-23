@@ -1,16 +1,16 @@
 @startuml
 skin rose
 
-'header  #  define Disable false
-'header  #  define Enable true
+'[header]  #  define Disable false
+'[header]  #  define Enable true
 
-'code private:
-'code    bool LED_LKS;
-'code    bool LED_lane;
-'code    bool LED_steering;
-'code    bool servoing;
+'[code] private:
+'[code]    bool LED_LKS;
+'[code]    bool LED_lane;
+'[code]    bool LED_steering;
+'[code]    bool servoing;
 
-'init    LED_LKS = LED_lane = LED_steering = servoing = Disable;
+'[init]    LED_LKS = LED_lane = LED_steering = servoing = Disable;
 
 [*] --> LKSModeOff
 

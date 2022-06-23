@@ -1164,7 +1164,7 @@ class Parser(object):
             # can call parse_transition() with a generated code and we do not
             # reuse the parser to create a temporary AST, instead we pass list
             # of tokens.
-            self.tokens = [str(inst.children[0]), str(inst.children[1]), 
+            self.tokens = [str(inst.children[0]), str(inst.children[1]),
                            str(inst.children[2])]
             for i in range(3, len(inst.children)):
                 self.tokens.append(str(inst.children[i].data))
@@ -1172,7 +1172,7 @@ class Parser(object):
             self.parse_transition()
         elif inst.data[0:6] == 'state_':
             self.parse_state(inst)
-        elif inst.data in ['comment', 'skin']:
+        elif inst.data in ['comment', 'skin', 'hide']:
             return
         else:
             self.fatal('Token ' + inst.data + ' not yet managed')
