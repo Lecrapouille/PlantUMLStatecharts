@@ -17,7 +17,7 @@ def run_instruction(inst):
     if inst.data == 'state_diagram':
         for c in inst.children:
             run_instruction(c)
-    elif inst.data == 'comment':
+    elif inst.data in ['comment', 'skin']:
         pass
     elif inst.data == 'cpp_code':
         print("C++ code:", str(inst.children[0]))
@@ -35,13 +35,14 @@ def run_instruction(inst):
             elif inst.children[i].data == 'action':
                 tr.action = inst.children[i].children[0]
         print(tr)
-            
+    elif inst.data in ['state_entry', 'state_exit', 'state_comment', 'state_event']:
+        print('State ' + inst.children[0] + ' event: ' + inst.children[1].children[0])
     else:
         print("FIXME not yet managed:", inst.data)
         pass
 
 def main():
-    f = open('grammar.ebnf')
+    f = open('../statechart.ebnf')
     parser = Lark(f.read())
     f = open(sys.argv[1])
     ast = parser.parse(f.read())

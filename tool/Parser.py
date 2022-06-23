@@ -111,6 +111,10 @@ class Transition(object):
         # Action code (C++ code or pseudo code)
         self.action = ''
 
+    def __str__(self):
+        return self.origin + ' ==> ' + self.destination + ' : ' + \
+               self.event.name + ' [' + self.guard + '] / ' + self.action
+
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML state.
 ### Example of PlantUML state:
@@ -228,13 +232,15 @@ class Parser(object):
     ###########################################################################
     def warning(self, msg):
         self.warnings += msg
-        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
+        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name \
+              + ": "  + msg + f"{bcolors.ENDC}")
 
     ###########################################################################
     ### Print an error message and exit
     ###########################################################################
     def fatal(self, msg):
-        print(f"{bcolors.FAIL}   FATAL in the state machine " + self.name + ": "  + msg + f"{bcolors.ENDC}")
+        print(f"{bcolors.FAIL}   FATAL in the state machine " + self.name + \
+              ": " + msg + f"{bcolors.ENDC}")
         sys.exit(-1)
 
     ###########################################################################
@@ -242,24 +248,15 @@ class Parser(object):
     ### the error happened.
     ###########################################################################
     def parse_error(self, msg):
-        print(f"{bcolors.FAIL}   Failed parsing " + self.name + " at line " + str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
+        print(f"{bcolors.FAIL}   Failed parsing " + self.name + " at line " + \
+              str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
         sys.exit(-1)
-
-    ###########################################################################
-    ### Check if the token match for a C/C++ variable name
-    ###########################################################################
-    def assert_valid_C_name(self, token):
-        if token in ['*', '[*]']:
-            return
-        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", token):
-            self.parse_error('Invalid C++ name "' + token + '"')
 
     ###########################################################################
     ### Add a state as graph node with its attribute if and only if it does not
     ### belong to this graph structure.
     ###########################################################################
     def add_state(self, name):
-        self.assert_valid_C_name(name)
         if not self.graph.has_node(name):
             self.graph.add_node(name, data = State(name))
 
@@ -360,7 +357,8 @@ class Parser(object):
     def generate_common_header(self):
         self.fd.write('// This file as been generated the ')
         self.fd.write(date.today().strftime("%B %d, %Y\n"))
-        self.fd.write('// This code generation is still experimental. Some border cases may not be correctly managed!\n\n')
+        self.fd.write('// This code generation is still experimental. Some '
+                      'border cases may not be correctly managed!\n\n')
 
     ###########################################################################
     ### Code generator: add the header file.
@@ -411,11 +409,13 @@ class Parser(object):
     ###########################################################################
     def generate_stringify_function(self):
         self.generate_function_comment('Convert enum states to human readable string.')
-        self.fd.write('static inline const char* stringify(' + self.enum_name + ' const state)\n{\n')
+        self.fd.write('static inline const char* stringify(' + self.enum_name + \
+                      ' const state)\n{\n')
         self.indent(1), self.fd.write('static const char* s_states[] =\n')
         self.indent(1), self.fd.write('{\n')
         for state in list(self.graph.nodes):
-            self.indent(2), self.fd.write('[' + self.enum_name + '::' + self.state_name(state) + '] = "' + state + '",\n')
+            self.indent(2), self.fd.write('[' + self.enum_name + '::' + \
+            self.state_name(state) + '] = "' + state + '",\n')
         self.indent(1), self.fd.write('};\n\n')
         self.indent(1), self.fd.write('return s_states[state];\n};\n\n')
 
@@ -441,7 +441,8 @@ class Parser(object):
                 'onevent' : 'onEventState', # FIXME missing onEventXXXState once dealing with multiple events
         }
         self.indent(3)
-        self.fd.write('.' + what +' = &' + self.class_name + '::' + dict[what] + self.state_name(state) + ',\n')
+        self.fd.write('.' + what +' = &' + self.class_name + '::' + dict[what] \
+                      + self.state_name(state) + ',\n')
 
     ###########################################################################
     ### Code generator: add the state machine constructor method.
@@ -456,7 +457,8 @@ class Parser(object):
             if (s.entering == '') and (s.leaving == ''):
                 continue
 
-            self.indent(2), self.fd.write('m_states[' + self.enum_name + '::' + self.state_name(s.name) + '] =\n')
+            self.indent(2), self.fd.write('m_states[' + self.enum_name + '::' \
+               + self.state_name(s.name) + '] =\n')
             self.indent(2), self.fd.write('{\n')
             if s.entering != '':
                 self.generate_pointer_function('entering', s.name)
@@ -467,20 +469,25 @@ class Parser(object):
             self.indent(2), self.fd.write('};\n')
             empty = False
         if empty:
-            self.indent(2), self.fd.write('// Note: no table of states created since no state will do actions!\n')
+            self.indent(2), self.fd.write('// Note: no table of states created '
+              'since no state will do actions!\n')
 
     ###########################################################################
     ### Code generator: add the state machine constructor method.
     ###########################################################################
     def generate_constructor(self):
         states = list(self.graph.nodes)
-        self.generate_method_comment('Default constructor. Start from initial state and call it actions.')
-        self.indent(1), self.fd.write(self.class_name + '(' + self.extra_code.argvs + ')\n')
-        self.indent(2), self.fd.write(': StateMachine(' + self.enum_name + '::' + self.state_name(self.initial_state) + ')\n')
+        self.generate_method_comment('Default constructor. Start from initial '
+                                     'state and call it actions.')
+        self.indent(1)
+        self.fd.write(self.class_name + '(' + self.extra_code.argvs + ')\n')
+        self.indent(2), self.fd.write(': StateMachine(' + self.enum_name \
+            + '::' + self.state_name(self.initial_state) + ')\n')
         self.indent(1), self.fd.write('{\n')
         self.generate_table_states(states)
         self.fd.write(self.extra_code.init)
-        self.indent(2), self.fd.write('onEnteringState' + self.state_name(self.initial_state) + '();\n')
+        self.indent(2), self.fd.write('onEnteringState')
+        self.fd.write(self.state_name(self.initial_state) + '();\n')
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -492,7 +499,8 @@ class Parser(object):
         self.indent(1), self.fd.write('{\n')
         self.indent(2), self.fd.write('StateMachine::start();\n')
         self.fd.write(self.extra_code.init)
-        self.indent(2), self.fd.write('onEnteringState' + self.state_name(self.initial_state) + '();\n')
+        self.indent(2), self.fd.write('onEnteringState')
+        self.fd.write(self.state_name(self.initial_state) + '();\n')
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -625,7 +633,9 @@ class Parser(object):
         for origin, destination in transitions:
             tr = self.graph[origin][destination]['data']
             if tr.guard != '':
-                self.fd.write('    MOCK_METHOD(bool, onGuardingTransition' + self.state_name(origin) + '_' + self.state_name(destination) + ', (), (override));\n')
+                self.fd.write('    MOCK_METHOD(bool, onGuardingTransition')
+                self.fd.write(self.state_name(origin) + '_' + self.state_name(destination))
+                self.fd.write(', (), (override));\n')
         #for s in self.states:
         #    if s.entering != '':
         #        self.fd.write('    MOCK_METHOD(void, ' + s.entering + ', (), (override));\n')
@@ -1032,18 +1042,20 @@ class Parser(object):
                 # the state transition for each event.
                 self.lookup_events[tr.event].append((tr.origin, tr.destination))
             elif self.tokens[i] == 'guard':
-                tr.guard = self.tokens[i + 1]
+                tr.guard = self.tokens[i + 1][1:-1].strip()
             elif self.tokens[i] == 'action':
-                tr.action = self.tokens[i + 1]
+                tr.action = self.tokens[i + 1][1:].strip()
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
                 if tr.action == '':
                     tr.action = '// Dummy action\n'
-                    tr.action += '#warning "no state ' + tr.origin + ' reaciton to event ' + tr.event.name + '"'
+                    tr.action += '#warning "no state ' + tr.origin
+                    tr.action += ' reaction to event ' + tr.event.name + '"'
 
         # Store parsed information as edge of the graph
         self.add_transition(tr)
+        self.tokens = []
 
     ###########################################################################
     ### Parse the following plantUML code and store information of the analyse:
@@ -1059,12 +1071,9 @@ class Parser(object):
     ###    State : activity / activity
     ###    State : comment / C++ comment
     ###########################################################################
-    def parse_state(self):
-        what = self.tokens[2].lower()
-        name = self.tokens[0].upper()
-
-        # Manage a pathological case:
-        self.assert_valid_C_name(name)
+    def parse_state(self, inst):
+        what = inst.data[6:]
+        name = inst.children[0].upper()
 
         # Create first a node if it does not exist. This is the simplest way
         # preventing smashing previously initialized values.
@@ -1072,22 +1081,27 @@ class Parser(object):
 
         # Update state fields
         state = self.graph.nodes[name]['data']
-        if (what in ['entry', 'entering']) and (self.tokens[3] in ['/', ':']):
+        if what in ['entry', 'entering']:
             state.entering += '        '
-            state.entering += ' '.join(self.tokens[4:]) + ';\n'
-        elif (what in ['exit', 'leaving']) and (self.tokens[3] in ['/', ':']):
+            state.entering += inst.children[1].children[0][1:].strip()
+            state.entering += ';\n'
+        elif what in ['exit', 'leaving']:
             state.leaving += '        '
-            state.leaving += ' '.join(self.tokens[4:]) + ';\n'
+            state.leaving += inst.children[1].children[0][1:].strip()
+            state.leaving += ';\n'
         elif what == 'comment':
-            state.comment += ' '.join(self.tokens[4:])
+            state.comment += inst.children[1].children[0][1:].strip()
+        elif what in ['do', 'activity']:
+            state.activity += inst.children[1].children[0][1:].strip()
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
         # help us on graph theory traversal algorithm (like finding cycles).
         elif what in ['on', 'event']:
-            self.tokens = [ name, '->', name, ':' ] + self.tokens[3:]
+            self.tokens = [ name, '->', name ]
+            for i in range(1, len(inst.children)):
+                self.tokens.append(str(inst.children[i].data))
+                self.tokens.append(str(inst.children[i].children[0]))
             self.parse_transition(True)
-        elif what in ['do', 'activity']:
-            state.activity += ' '.join(self.tokens[4:])
         else:
             self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
 
@@ -1110,25 +1124,31 @@ class Parser(object):
     ### Unit tests:
     ###   'test ...
     ###########################################################################
-    def parse_extra_code(self, what, code):
-        if what == '[header]':
+    def parse_extra_code(self, token, code):
+        if token == '[header]':
             self.extra_code.header += code
-        elif what == '[footer]':
+            self.extra_code.header += '\n'
+        elif token == '[footer]':
             self.extra_code.footer += code
-        elif what == '[param]':
+            self.extra_code.footer += '\n'
+        elif token == '[param]':
             if self.extra_code.argvs != '':
                 self.extra_code.argvs += ', '
             self.extra_code.argvs += code
-        elif what == '[init]':
+        elif token == '[init]':
             self.extra_code.init += '        '
             self.extra_code.init += code
-        elif what == '[code]':
-            self.extra_code.functions += '    '
-            self.extra_code.init += code
-        elif what == '[test]':
+            self.extra_code.init += '\n'
+        elif token == '[code]':
+            if code not in ['public:', 'protected:', 'private:']:
+                self.extra_code.functions += '    '
+            self.extra_code.functions += code
+            self.extra_code.functions += '\n'
+        elif token == '[test]':
             self.extra_code.unit_tests += code
+            self.extra_code.unit_tests += '\n'
         else:
-            self.fatal('Token ' + what + ' not yet managed')
+            self.fatal('Token ' + token + ' not yet managed')
 
     ###########################################################################
     ### Traverse the Abstract Syntax Tree of the PlantUML file
@@ -1138,14 +1158,21 @@ class Parser(object):
             for c in inst.children:
                 self.visit_ast(c)
         elif inst.data == 'cpp_code':
-            self.parse_extra_code(str(inst.children[0]))
+            self.parse_extra_code(str(inst.children[0]), inst.children[1].lstrip())
         elif inst.data == 'transition':
-            self.tokens = [inst.children[0], inst.children[1], inst.children[2]]
+            # Note: we have to convert into a list of tokens since parse_state()
+            # can call parse_transition() with a generated code and we do not
+            # reuse the parser to create a temporary AST, instead we pass list
+            # of tokens.
+            self.tokens = [str(inst.children[0]), str(inst.children[1]), 
+                           str(inst.children[2])]
             for i in range(3, len(inst.children)):
-                self.tokens.append(inst.children[i])
-                self.tokens.append(inst.children[i].children[0])
+                self.tokens.append(str(inst.children[i].data))
+                self.tokens.append(str(inst.children[i].children[0]))
             self.parse_transition()
-        elif inst.data in ['comment', 'skin', 'state_entry', 'state_exit', 'state_comment', 'state_event']: ############# FIXME
+        elif inst.data[0:6] == 'state_':
+            self.parse_state(inst)
+        elif inst.data in ['comment', 'skin']:
             return
         else:
             self.fatal('Token ' + inst.data + ' not yet managed')

@@ -5,7 +5,8 @@ start: "@startuml" "\n" state_diagram "@enduml" (WS|"\n"*)
 
 state_diagram: ( cpp_code | comment | skin | state_block | state_action | transition | "\n" )*
 skin: "skin" FREE_TEXT "\n"
-cpp_code: "'" "[header]" FREE_TEXT "\n"
+cpp_code: "'" CPP_WHAT FREE_TEXT "\n"
+CPP_WHAT: "[header]" | "[footer]" | "[param]" | "[init]" | "[code]" | "[test]"
 comment: "'" FREE_TEXT "\n"
 
 state_block: "state" STATE "{" "\n" state_diagram "}" "\n"
