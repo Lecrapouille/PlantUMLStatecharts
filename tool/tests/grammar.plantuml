@@ -1,0 +1,4 @@
+@startuml
+State1 --> State2 : eee [ a[0] + b] / action = 1/3
+State2 <-- State3
+@enduml

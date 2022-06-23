@@ -1,0 +1,31 @@
+// https://github.com/thomedes/PlantUML-Lark-EBNF
+// https://stackoverflow.com/questions/65872693/how-can-i-split-a-rule-with-lark-ebnf
+
+start: "@startuml" "\n" state_diagram "@enduml" (WS|"\n"*)
+
+state_diagram: ( cpp_code | comment | skin | state_block | state_action | transition | "\n" )*
+skin: "skin" FREE_TEXT "\n"
+cpp_code: "'" "[header]" FREE_TEXT "\n"
+comment: "'" FREE_TEXT "\n"
+
+state_block: "state" STATE "{" "\n" state_diagram "}" "\n"
+?state_action: state_entry | state_exit | state_event | state_comment
+state_entry: STATE ":" ("entry" | "entering") action "\n"
+state_exit: STATE ":" ("exit" | "leaving") action "\n"
+state_event: STATE ":" ("on" | "event") event guard? action? "\n"
+state_comment: STATE ":" "comment" action? "\n"
+
+transition: STATE ARROW STATE (":" event? guard? action?)? "\n"
+ARROW: ("->" | "-->" | "<-" | "<--")
+
+FREE_TEXT: /.+/
+STATE: "[*]" | CNAME
+event: CNAME+ ( /\([^)]*\)/ )?
+guard : /\[.+\]/
+action: /\/.+/
+
+%import common.ESCAPED_STRING
+%import common.CNAME
+%import common.WS_INLINE
+WS: /[ \t\f\r]/+
+%ignore WS

@@ -23,6 +23,7 @@ from pathlib import Path
 from collections import defaultdict
 from collections import deque
 from datetime import date
+from lark import Lark, Transformer
 
 import sys, os, re, itertools
 import networkx as nx
@@ -167,6 +168,10 @@ class Parser(object):
     ### Default dummy constructor.
     ###########################################################################
     def __init__(self):
+        # Context-free language parser
+        self.parser = None
+        # Abstract Syntax Tree
+        self.ast = None
         # File descriptor of the plantUML file.
         self.fd = None
         # Name of the plantUML file.
@@ -177,8 +182,6 @@ class Parser(object):
         self.enum_name = ''
         # List of tokens split line by line.
         self.tokens = []
-        # List Cache tokens::size().
-        self.nb_tokens = 0
         # List Cache the current line to display in error messages.
         self.lines = 0
         # Dictionnary of "event => (source, destination) states" needed to
@@ -198,11 +201,12 @@ class Parser(object):
         self.warnings = ''
 
     ###########################################################################
-    ### Reset states
+    ### Reset states.
+    ### Note: self.parser is not reloaded since useless.
     ###########################################################################
     def reset(self):
         self.tokens = []
-        self.nb_tokens = 0
+        self.ast = None
         self.line = ''
         self.lines = 0
         self.lookup_events = defaultdict(list)
@@ -1019,33 +1023,18 @@ class Parser(object):
         self.add_state(tr.origin)
         self.add_state(tr.destination)
 
-        # Analyse the following optional plantUML code: ": event ..."
-        if (self.nb_tokens > 3) and (self.tokens[3] == ':'):
-            i = 4
-            # Halt on the end of line or when detecting the beginning of a guard '[' or an action '/'
-            while (i < self.nb_tokens) and (self.tokens[i] not in ['[', '/']):
-                i += 1
-            self.parse_event(tr.event, self.tokens[4:i])
-
-            # Events are optional. If not given, we use them as anonymous internal event.
-            # Store them in a dictionary: "event => (origin, destination) states" to create
-            # the state transition for each event.
-            self.lookup_events[tr.event].append((tr.origin, tr.destination))
-
-            # Analyse the following optional plantUML code: "[ guard ] ..."
-            # Guards are optional. When optional they always return true.
-            if (i < self.nb_tokens) and (self.tokens[i] == '['):
-                i, j = i + 1, i + 1
-                while (i < self.nb_tokens) and (self.tokens[i] != ']'):
-                    i += 1
-                if self.tokens[i] != ']':
-                    self.parse_error("Unterminated guard close")
-                tr.guard = ' '.join(self.tokens[j:i])
-                i = i + 1
-
-            # Analyse the following optional plantUML code: "/ action"
-            if (i < self.nb_tokens) and (self.tokens[i] == '/'):
-                tr.action = ' '.join(self.tokens[i+1:])
+        # Analyse the following optional plantUML code: ": event [ guard ] / action"
+        for i in range(3, len(self.tokens)):
+            if self.tokens[i] == 'event':
+                self.parse_event(tr.event, self.tokens[i + 1])
+                # Events are optional. If not given, we use them as anonymous internal event.
+                # Store them in a dictionary: "event => (origin, destination) states" to create
+                # the state transition for each event.
+                self.lookup_events[tr.event].append((tr.origin, tr.destination))
+            elif self.tokens[i] == 'guard':
+                tr.guard = self.tokens[i + 1]
+            elif self.tokens[i] == 'action':
+                tr.action = self.tokens[i + 1]
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
@@ -1103,16 +1092,6 @@ class Parser(object):
             self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
 
     ###########################################################################
-    ### Helper function for removing "'xxx" in the text and add some spaces
-    ### for the indentation.
-    ###########################################################################
-    def truncate(self, txt, d, spaces=''):
-        res = txt[txt.find(d) + len(d):].lstrip()
-        if res == '':
-            return res
-        return spaces + res
-
-    ###########################################################################
     ### Extend the PlantUML single-line comments to add extra commands to help
     ### generating C++ code. For examples:
     ### Add code before and after the generated code:
@@ -1131,104 +1110,74 @@ class Parser(object):
     ### Unit tests:
     ###   'test ...
     ###########################################################################
-    def parse_extra_code(self):
-        if self.tokens[0] == '\'header':
-            self.extra_code.header += self.truncate(self.line, self.tokens[0])
-        elif self.tokens[0] == '\'footer':
-            self.extra_code.footer += self.truncate(self.line, self.tokens[0])
-        elif self.tokens[0] == '\'param':
+    def parse_extra_code(self, what, code):
+        if what == '[header]':
+            self.extra_code.header += code
+        elif what == '[footer]':
+            self.extra_code.footer += code
+        elif what == '[param]':
             if self.extra_code.argvs != '':
                 self.extra_code.argvs += ', '
-            self.extra_code.argvs += self.truncate(self.line.strip(), self.tokens[0])
-        elif self.tokens[0] == '\'init':
-            self.extra_code.init += self.truncate(self.line, self.tokens[0], '        ')
-        elif self.tokens[0] == '\'code':
-            self.extra_code.functions += self.truncate(self.line, self.tokens[0], '    ')
-        elif self.tokens[0] == '\'test':
-            self.extra_code.unit_tests += self.truncate(self.line, self.tokens[0])
-        #else:
-        #    print('Comment:', self.line)
+            self.extra_code.argvs += code
+        elif what == '[init]':
+            self.extra_code.init += '        '
+            self.extra_code.init += code
+        elif what == '[code]':
+            self.extra_code.functions += '    '
+            self.extra_code.init += code
+        elif what == '[test]':
+            self.extra_code.unit_tests += code
+        else:
+            self.fatal('Token ' + what + ' not yet managed')
 
     ###########################################################################
-    ### Read a single line, tokenize its symbols and store them in a list.
-    ### FIXME Quick and dirty way of doing it: a flex/bison parser would have
-    ### been be better while for parsing PlantUML this is fine. In fact, I did
-    ### not initially though that splitting by spaces has negative impact on
-    ### the C++ code for the guard and actions.
-    ### FIXME (\w)\s*->\s*(\w)\s*:\s*([^\[]*)\s(\[.*\])\s*\/(.*)
-    ### A -> B: event bar [ sdsd() && foo || foo[0]]   / sdsd
+    ### Traverse the Abstract Syntax Tree of the PlantUML file
     ###########################################################################
-    def parse_line(self):
-        self.nb_tokens = 0
-        # Iterate for each empty line
-        while self.nb_tokens == 0:
-            self.lines += 1
-            self.line = self.fd.readline()
-            if not self.line:
-                return False
+    def visit_ast(self, inst):
+        if inst.data == 'state_diagram':  # FIXME To be removed when creating the AST
+            for c in inst.children:
+                self.visit_ast(c)
+        elif inst.data == 'cpp_code':
+            self.parse_extra_code(str(inst.children[0]))
+        elif inst.data == 'transition':
+            self.tokens = [inst.children[0], inst.children[1], inst.children[2]]
+            for i in range(3, len(inst.children)):
+                self.tokens.append(inst.children[i])
+                self.tokens.append(inst.children[i].children[0])
+            self.parse_transition()
+        elif inst.data in ['comment', 'skin', 'state_entry', 'state_exit', 'state_comment', 'state_event']: ############# FIXME
+            return
+        else:
+            self.fatal('Token ' + inst.data + ' not yet managed')
 
-            # Replace substring to be sure to parse correctly (ugly hack)
-            self.line = self.line.replace(':', ' : ')
-            self.line = self.line.replace('/', ' / ')
-            self.line = self.line.replace('\\n--\\n', ' / ')
-            self.line = self.line.replace(';\\n', '; ')
-            #self.line = self.line.replace('[', ' [ ')
-            #self.line = self.line.replace(']', ' ] ')
-            #self.line = self.line.replace('\\n', ' ')
-
-            # Tokenize the line (yes quick and dirty way)
-            self.tokens = self.line.strip().split(' ')
-
-            # Remove dummy tokens (multi spaces)
-            while '' in self.tokens:
-                self.tokens.remove('')
-
-            # Detect a single-line-comment is present and remove tokens
-            # after the comment
-            for i in range(len(self.tokens)):
-                if self.tokens[i] == '\'':
-                    self.tokens = self.tokens[:i]
-                    break
-
-            # Cache the number of tokens
-            self.nb_tokens = len(self.tokens)
-
-            # Uncomment to help debuging
-            #print('\n=========\nparse_line: ' + line[:-1])
-            #for t in self.tokens:
-            #    print('token: "' + t + '"')
-        return True
+    ###########################################################################
+    ### Load the PlantUML statechart grammar file
+    ###########################################################################
+    def load_plantuml_grammar_file(self, grammar_file):
+        try:
+            self.fd = open(grammar_file)
+            self.parser = Lark(self.fd.read())
+            self.fd.close()
+        except Exception as FileNotFoundError:
+            self.fatal('Failed loading grammar file for parsing plantuml statechart')
 
     ###########################################################################
     ### Parse plantUML file parser and create a graph structure.
     ###########################################################################
     def parse_plantuml_file(self, umlfile, cpp_or_hpp, classname):
         self.reset()
-        self.fd = open(umlfile, 'r')
         self.name = Path(umlfile).stem
         self.class_name = self.name + classname
         self.enum_name = self.class_name + 'States'
-
-        # PlantUML file shall start by '@startuml'
-        if (not self.parse_line()) or (self.tokens[0] != '@startuml'):
-           self.parse_error('Bad plantuml file: did not find @startuml')
-
-        # Since PlantUML instruction by line read a line one by one
-        while self.parse_line():
-            if (self.nb_tokens >= 3) and (self.tokens[1] in ['->', '-->', '<-', '<--']):
-                self.parse_transition()
-            elif (self.nb_tokens >= 4) and (self.tokens[1] == ':'):
-                self.parse_state()
-            elif self.tokens[0][0] == '\'':
-                self.parse_extra_code()
-            elif self.tokens[0] == '@enduml':
-                break
-            elif self.tokens[0] in ['hide', 'scale', 'skin']:
-                continue
-            else:
-                self.parse_error('Bad line')
-
+        # Make the plantUMl file read by the parser
+        if self.parser == None:
+            self.load_plantuml_grammar_file('/home/qq/MyGitHub/StateMachine/tool/statechart.ebnf')
+        self.fd = open(umlfile, 'r')
+        self.ast = self.parser.parse(self.fd.read())
         self.fd.close()
+        # Traverse the AST to create the graph structure of the state machine
+        for inst in self.ast.children:
+            self.visit_ast(inst)
 
     ###########################################################################
     ### Entry point for translating a plantUML file into a C++ source file.

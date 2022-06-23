@@ -12,7 +12,7 @@ This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python 
 ## Limitation: what the tools does not offer
 
 - Parsing Hierarchic State Machine (HSM). It only parses simple Finite State Machine (FSM). I'm thinking to redo the
-  project using a flex/bison-like parser. 
+  project using a flex/bison-like parser.
 - Does not parse fork, concurrent states, composite states, pseudo states, history.
 - Does not manage multi edges (several transitions from the same origin and destination state). As consequence, you
   cannot add several `on event` in the same state.
@@ -30,11 +30,12 @@ This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python 
 ## Prerequisite
 
 - Python3.
-- networkx https://networkx.org/ the tool read PlantUML file and create a DiGraph (shall be a MultiDiGraph) as intermediate
+- [Networkx](https://networkx.org/) the tool read PlantUML file and create a DiGraph (shall be a MultiDiGraph) as intermediate
   structure before generating the C++ code.
+- [Lark](https://github.com/lark-parser/lark) a parsing toolkit for Python.
 
 ```
-python3 -m pip install networkx
+python3 -m pip install networkx lark
 ```
 
 ## Command line
@@ -83,11 +84,11 @@ Note: I added some sugar syntax:
 
 I added some syntax to help generate extra C++ code. They start with the `'` keyword which is a PlantUML single line comment
 so they will not produce syntax error when PlantUML is parsing the file but, on our side, we exploit them.
-- `'header` for adding code in the header of the file, before the class of the state machine. You can include other C++ files, create or define functions.
-- `'footer` for adding code in the footer of the file, after the class of the state machine.
-- `'param` are arguments to pass to the state machine C++ constructor. Commas are added. One argument by line.
-- `'init` is C++ code called by the constructor or bu the `reset()` function.
-- `'code` to allow you to add member variables or member functions.
+- `'[header]` for adding code in the header of the file, before the class of the state machine. You can include other C++ files, create or define functions.
+- `'[footer]` for adding code in the footer of the file, after the class of the state machine.
+- `'[param]` are arguments to pass to the state machine C++ constructor. Commas are added. One argument by line.
+- `'[init]` is C++ code called by the constructor or bu the `reset()` function.
+- `'[code]` to allow you to add member variables or member functions.
 
 ## Rule of execution
 
@@ -106,6 +107,14 @@ At the beginning, I did not understand differences between the State/Transition 
 
 What I understood after: in 1956 there were to kind of state machines: Moore in where actions where called from states and Mealy in where actions where called from transitions. They describe exactly the same system and you can translate a Moore machine into a Mealy machine and vice versa, without losing any expressiveness [cite](https://www.itemis.com/en/yakindu/state-machine/documentation/user-guide/overview_what_are_state_machines). In 1984, Harel mixed the two syntax plus added some features (composite ...) and named it statecharts. Finally UML integrated statecharts. In this [document](https://cs.emis.de/LNI/Proceedings/Proceedings07/TowardEfficCode_3.pdf) they simplify
 the statechart graph to get a Mealy graph before generating the code. In the case of our translator, we keep both cases because we want to generate simple code that people can easily read and understand.
+
+## Details Design
+
+The process pipeline of the Python script is the following:
+- The [Lark](https://github.com/lark-parser/lark) parser is loading the [grammar](tool/statechart.ebnf) file for parsing PlantUML statechart files. Note: this grammar does not come from an official source (PlantUML does not offer their grammar). It manages a subset of the syntax.
+- The [PlantUML statecharts](https://plantuml.com/fr/state-diagram) file is then parsed and an Abstract Syntax Tree (AST) is generated.
+- This AST is then visited and a graph [Networkx](https://networkx.org/) structure is created (node are states and arcs are transitions).
+- This graph is visited to make some verifications (if the state machine is well formed ...), to generate the C++ code source and to generate unit tests from graph cyles or graph pathes from source to sinks ...
 
 ## References
 
