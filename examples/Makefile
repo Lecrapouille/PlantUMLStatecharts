@@ -63,15 +63,15 @@ CXXFLAGS += $(STANDARD) $(COMPIL_FLAGS) `pkg-config --cflags gtest gmock`
 LDFLAGS = `pkg-config --libs gtest gmock`
 
 # Header file dependencies
-DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*$(PREFIX).Td
-POSTCOMPILE = mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
+# FIXME
+# DEPFLAGS = -MT $@ -MMD -MP -MF $(BUILD)/$*$(PREFIX).Td
+# POSTCOMPILE = $(Q)mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
 
 # Files to compile
 TARGETS = Simple LKS Gumball LoopError Erroneous RichMan Wifi
-# Motor
 
 # Mandatory else Makefile drops temporary files.
-.PRECIOUS: $(BUILD)/%$(PREFIX)Tests.cpp
+.PRECIOUS: $(BUILD)/%$(PREFIX)Tests.cpp $(BUILD)/%$(PREFIX)Tests.o
 
 # Compile targets
 .PHONY: all
@@ -84,14 +84,15 @@ all: $(TARGETS)
 	$(Q)mv $@ $(BUILD)
 
 # Compile C++ source files
-%$(PREFIX)Tests.o: %$(PREFIX)Tests.cpp $(BUILD)/%$(PREFIX)Tests.d
+%$(PREFIX)Tests.o: %$(PREFIX)Tests.cpp
+# FIXME $(BUILD)/%$(PREFIX)Tests.d
 	@echo "\033[0;32mCompiling $<\033[0m"
 	$(Q)$(CXX) $(DEPFLAGS) $(CXXFLAGS) $(INCLUDES) $(DEFINES) -c $(abspath $(BUILD)/$<) -o $(abspath $@)
 	$(POSTCOMPILE)
 
 # Create the UML diagrams
 %.png: %.plantuml
-	@echo "\033[0;32mGenerating chart $<\033[0m"
+	@echo "\033[0;32mGenerating $@\033[0m"
 	$(Q)java -jar $(HOME)/plantuml-1.2022.5.jar $<
 	$(Q)mv $@ $(BUILD)
 
