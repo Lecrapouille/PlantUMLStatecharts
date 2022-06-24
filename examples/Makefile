@@ -22,8 +22,10 @@
 # SOFTWARE.
 ###############################################################################
 
+# Translator folder
+PARSER_FOLDER = ../translator
 # Our tool for parsing PlantUML statecharts and generate C++ code
-PLANTUML_PARSER = ../tool/Parser.py
+PLANTUML_PARSER = $(PARSER_FOLDER)/statecharts.py
 # File and class name prefix
 PREFIX = Controller
 # Arguments passed to $(PLANTUML_PARSER)
@@ -93,12 +95,15 @@ all: $(TARGETS)
 # Create the UML diagrams
 %.png: %.plantuml
 	@echo "\033[0;32mGenerating $@\033[0m"
-	$(Q)java -jar $(HOME)/plantuml-1.2022.5.jar $<
+	$(Q)plantuml $<
 	$(Q)mv $@ $(BUILD)
 
-%$(PREFIX)Tests.cpp: %.plantuml %.png $(PLANTUML_PARSER) Makefile
+%$(PREFIX)Tests.cpp: %.plantuml %.png $(PLANTUML_PARSER) $(BUILD)/statecharts.ebnf Makefile
 	@echo "\033[0;32mParsing $<\033[0m"
 	$(Q)(cd $(BUILD) && ../$(PLANTUML_PARSER) ../$< $(PLANTUML_COMMAND_LINE))
+
+$(BUILD)/statecharts.ebnf: $(PARSER_FOLDER)/statecharts.ebnf
+	cp $< $@
 
 .PHONY: clean
 clean:

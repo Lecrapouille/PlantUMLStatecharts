@@ -1,7 +1,7 @@
 # PlantUML Statecharts (State Machine) Translator
 
 This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python
-3 script for generating finite state machines (FSM) in C++ code from [PlantUML
+3 script for generating finite state machines (FSM) in C++14 code from [PlantUML
 statecharts](https://plantuml.com/fr/state-diagram):
 - The generated code is a compromise between simplicity to read, no virtual
   methods, memory foot print.
@@ -55,6 +55,8 @@ This repository contains several [examples](examples) of FSM.
 - [Networkx](https://networkx.org/) before the PlantUML is translated into C++
   file, a directed graph structure is created as intermediate structure before
   generating the C++ code (shall be ideally a MultiDiGraph).
+- [PlantUML](https://plantuml.com) install this tool. It is not strictly important
+  for this project it only called to generated PNG files of examples.
 
 ```
 python3 -m pip install networkx lark
@@ -80,6 +82,12 @@ Example:
 ```
 
 Will create a `FooController.cpp` file with a class name `FooController`.
+
+## Examples
+
+```
+cd examples
+```
 
 ## PlantUML Statecharts syntax
 

@@ -1186,7 +1186,7 @@ class Parser(object):
             self.parser = Lark(self.fd.read())
             self.fd.close()
         except Exception as FileNotFoundError:
-            self.fatal('Failed loading grammar file for parsing plantuml statechart')
+            self.fatal('Failed loading grammar file ' + grammar_file + ' for parsing plantuml statechart')
 
     ###########################################################################
     ### Parse plantUML file parser and create a graph structure.
@@ -1198,7 +1198,7 @@ class Parser(object):
         self.enum_name = self.class_name + 'States'
         # Make the plantUMl file read by the parser
         if self.parser == None:
-            self.load_plantuml_grammar_file('/home/qq/MyGitHub/StateMachine/tool/statechart.ebnf')
+            self.load_plantuml_grammar_file(os.path.join(os.getcwd(), 'statecharts.ebnf'))
         self.fd = open(umlfile, 'r')
         self.ast = self.parser.parse(self.fd.read())
         self.fd.close()
