@@ -41,8 +41,11 @@ transition: STATE ARROW STATE (":" event? guard? action?)? "\n"
 event: CNAME+ ( /\([^)]*\)/ )?
 // Guard syntax is [ boolean C++ logic ]
 guard : /\[.+\]/
-// Action syntax is / C++ logic
-action: /\/.+/
+// UML action syntax is / C++ logic
+// State-Transition diagrams action syntax: is \n--\n C++ logic
+?action: uml_action | std_action
+uml_action: /\/.*/
+std_action: /\\n--\\n.*/
 
 STATE: "[*]" | CNAME
 ARROW: ("->" | "-->" | "<-" | "<--")

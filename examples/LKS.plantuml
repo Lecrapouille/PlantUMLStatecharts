@@ -20,19 +20,19 @@ WaitDetect : comment / LKS is not detecting the lane
 DetectLane : comment / LKS is detecting crossing the lane
 FollowLane : comment / LKS is following the lane
 
-LKSModeOff --> LKSModeOn : btn_LKS\n--\nLED_LKS = Enable
-LKSModeOn --> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable
-LKSModeOn -> DetectLane : detect\n--\nLED_lane = Enable
+LKSModeOff --> LKSModeOn : btn_LKS \n--\n LED_LKS = Enable
+LKSModeOn --> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable
+LKSModeOn -> DetectLane : detect \n--\n LED_lane = Enable
 
-DetectLane --> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable;\nLED_lane = Disable
-DetectLane -> WaitDetect : not detect\n--\nLED_lane = Disable
-DetectLane --> FollowLane : set\n--\nLED_steering = Enable;\nservoing = Enable
+DetectLane --> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable; LED_lane = Disable
+DetectLane -> WaitDetect : not detect \n--\n LED_lane = Disable
+DetectLane --> FollowLane : set \n--\n LED_steering = Enable; servoing = Enable
 
-FollowLane --> WaitDetect : not detect\n--\nLED_lane = Disable;\nLED_steering = Disable;\nservoing = Disable
-FollowLane -> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable;\nLED_lane = Disable;\nLED_steering = Disable;\nservoing = Disable
-FollowLane -> DetectLane : cancel\n--\nLED_steering = Disable;\nservoing = Disable
+FollowLane --> WaitDetect : not detect \n--\n LED_lane = Disable; LED_steering = Disable; servoing = Disable
+FollowLane -> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable; LED_lane = Disable; LED_steering = Disable; servoing = Disable
+FollowLane -> DetectLane : cancel \n--\n LED_steering = Disable; servoing = Disable
 
-WaitDetect -> DetectLane : detect\n--\nLED_lane = Enable
-WaitDetect -> LKSModeOff : btn_LKS\n--\nLED_LKS = Disable
+WaitDetect -> DetectLane : detect \n--\n LED_lane = Enable
+WaitDetect -> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable
 
 @enduml

@@ -1042,9 +1042,11 @@ class Parser(object):
                 # the state transition for each event.
                 self.lookup_events[tr.event].append((tr.origin, tr.destination))
             elif self.tokens[i] == 'guard':
-                tr.guard = self.tokens[i + 1][1:-1].strip()
-            elif self.tokens[i] == 'action':
-                tr.action = self.tokens[i + 1][1:].strip()
+                tr.guard = self.tokens[i + 1][1:-1].strip() # Remove [ and ]
+            elif self.tokens[i] == 'uml_action':
+                tr.action = self.tokens[i + 1][1:].strip() # Remove /
+            elif self.tokens[i] == 'std_action':
+                tr.action = self.tokens[i + 1][6:].strip() # Remove \n--\n
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
@@ -1202,6 +1204,8 @@ class Parser(object):
         self.fd = open(umlfile, 'r')
         self.ast = self.parser.parse(self.fd.read())
         self.fd.close()
+        # Debug: uncomment to see AST
+        # print(self.ast.pretty())
         # Traverse the AST to create the graph structure of the state machine
         for inst in self.ast.children:
             self.visit_ast(inst)
