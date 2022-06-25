@@ -1,6 +1,18 @@
 @startuml
 skin rose
 
+' This is a PlantUML single line commentary as well as the next lines
+' but they are interpreter by our translator for adding C++ code in
+' the generated code.
+
+'[header] // Add here all your includes
+'[header] #include <iostream>
+'[header] // and your multi-lines C++ header code.
+
+'[init] // Add here your code for the contructor and reset()
+'[init] std::cout << __func__ << std::endl;
+
+'[code] // Add here your code definining methods and member variables
 '[code] private:
 '[code]   void action1() { LOGD("[ACTION %s]\n", __func__); }
 '[code]   void action3() { LOGD("[ACTION %s]\n", __func__); }
@@ -17,19 +29,21 @@ skin rose
 '[code]   bool guard3 = true;
 '[code]   bool guard6 = true;
 
+'[footer] // Add here your multi-lines C++ footer code.
+
 [*] -> State1
 
 State1 --> State2 : event1 [ guard1 ] / action1()
 State1 <-- State2 : event2
 State2 -> [*] : event6
 
-State1 : comment / Ceci est l'etat 1
+State1 : comment / This is the state 1
 State1 : entry / action7()
 State1 : exit / action8()
 State1 : on event3 [ guard3 ] / action3()
 ' FIXME not managed State1 : on event4 / action4()
 
-State2 : comment / Ceci est l'etat 2
+State2 : comment / This is the state 2
 State2 : entry / action9()
 State2 : exit / action10()
 State2 : on event5 / action5()

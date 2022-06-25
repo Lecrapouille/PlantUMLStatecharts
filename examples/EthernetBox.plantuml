@@ -2,18 +2,17 @@
 skin rose
 
 '[code]   void pairing_phone() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void blue_led_off() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void white_led_off() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void blue_led_blinking() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void white_led_glow() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void blue_led_constant_glow() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_off() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_blinking() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_glow() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_constant_glow() { LOGD("[ACTION %s]\n", __func__); }
 '[code]   void launch_home_screen() { LOGD("[ACTION %s]\n", __func__); }
 
 [*] --> EthernetBoxOff
 
-EthernetBoxOff --> WifiDiscoverable : ignition on
-EthernetBoxOff <-- WifiDiscoverable : ignition off
-EthernetBoxOff <-- WifiDisconnected : ignition off
+EthernetBoxOff --> WifiDiscoverable : wifi powered on
+EthernetBoxOff <-- WifiDiscoverable : wifi powered off
+EthernetBoxOff <-- WifiDisconnected : wifi powered off
 
 WifiDiscoverable --> WifiConnected : pairing successful
 WifiDiscoverable <-- WifiConnected : long button press /  pairing_phone()
@@ -25,13 +24,13 @@ WifiConnected --> WifiDisconnected : phone Wifi disconnected
 
 
 EthernetBoxOff : comment / Not available for pairing Wifi
-EthernetBoxOff : entry / blue_led_off(); white_led_off()
+EthernetBoxOff : entry / led_off()
 WifiDiscoverable : comment / Avaialble for pairing or automatic connection or manual connection
-WifiDiscoverable : entry / blue_led_blinking()
+WifiDiscoverable : entry / led_blinking()
 WifiConnected : comment / Connected to phone via Wifi
-WifiConnected : entry / blue_led_constant_glow()
+WifiConnected : entry / led_constant_glow()
 WifiConnected : on short button press / launch_home_screen()
 WifiDisconnected : comment / No Wifi connected
-WifiDisconnected : entry / white_led_glow()
+WifiDisconnected : entry / led_glow()
 
 @enduml

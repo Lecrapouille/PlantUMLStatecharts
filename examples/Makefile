@@ -70,7 +70,7 @@ LDFLAGS = `pkg-config --libs gtest gmock`
 # POSTCOMPILE = $(Q)mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
 
 # Files to compile
-TARGETS = Simple LKS Gumball LoopError Erroneous RichMan Wifi
+TARGETS = Simple LaneKeeping Gumball InfiniteLoop BadSwitch1 BadSwitch2 RichMan EthernetBox Motor
 
 # Mandatory else Makefile drops temporary files.
 .PRECIOUS: $(BUILD)/%$(PREFIX)Tests.cpp $(BUILD)/%$(PREFIX)Tests.o

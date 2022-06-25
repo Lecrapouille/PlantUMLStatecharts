@@ -1,19 +1,18 @@
-' Motor Controller
-
 @startuml
 skin rose
 
-Idle : entry / printf("coucou\\n")
-Idle : exit / printf("bye\\n")
+Idle : entry / printf("Motor is hlated\\n")
+Idle : exit / printf("Motor is started\\n")
 [*] --> Idle
-Idle --> Start : setSpeed(x) [ x > 0 ]
+Idle --> Start : setSpeed(refSpeed) [ refSpeed > 0 ]
 Start --> Stop : halt
-Start -> Spinning : setSpeed(x) [ x > 0 ]
+Start -> Spinning : setSpeed(refSpeed) [ refSpeed > 0 ]
 Stop <- Spinning : halt
 ' FIXME not managed: double transition
-' Stop <- Spinning : setSpeed(x) [ x == 0 ]
+' Stop <- Spinning : setSpeed(refSpeed) [ refSpeed == 0 ]
+' Stop <- Spinning : halt
 Idle <- Stop
 
-Spinning : on setSpeed(x) [ x >= 0 ]
+Spinning : on setSpeed(refSpeed) [ refSpeed >= 0 ]
 
 @enduml

@@ -2,7 +2,7 @@
 skin rose
 
 '[header] #  include <stdio.h>
-'[header] #  define youpi printf("youpi\n")
+'[header] #  define yes printf("Yes! My first coin found!\n")
 
 '[code] private:
 '[code]    void incr(int& x) { x += 1; printf("Quarters: %d\n", quarters); }
@@ -10,10 +10,10 @@ skin rose
 '[code] private:
 '[code]    int quarters = 0;
 
-[*] -> FindQuarter
+[*] -> FindQuarter : / quarters = 0
 FindQuarter --> CountQuarter : Get quarter [ quarters < 10 ]\n--\nincr(quarters)
-CountQuarter -> Youpii : [ quarters == 1 ] /
+CountQuarter -> Yeah : [ quarters == 1 ] /
 CountQuarter --> FindQuarter : [ quarters > 1 ] /
-Youpii --> FindQuarter : \n--\nyoupi
+Yeah --> FindQuarter : \n--\nyes
 
 @enduml
