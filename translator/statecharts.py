@@ -63,7 +63,7 @@ class Event(object):
         for p in self.params:
             if params != '':
                 params += ', '
-            params += p.upper() + ' const& ' + p.lower()
+            params += p.upper() + ' const& ' + p
         return 'void ' + self.name + '(' + params + ')'
 
     def caller(self):
@@ -987,24 +987,32 @@ class Parser(object):
     ### TODO for the moment we do not manage boolean expression
     ### TODO manage builtins such as "when(event)" or "after(x)"
     ###########################################################################
-    def parse_event(self, event, toks):
-        if len(toks) == 0:
+    def parse_event(self, event, tokens): # ['setSpeed', '(refSpeed)']
+        event.params = []
+        N = len(tokens)
+        if N == 0: # No event
             event.name = ''
-            event.params = []
             return
-        parameters = False
-        event.name = toks[0].lower()
-        for t in toks[1:]:
-            if t[0] == '(':
-                parameters = True
-            elif t[0] == ')':
-                parameters = False
-                if event[-1] == ',':
-                    event.params.append(event[:-1])
-            if not parameters:
+        # Concat all tokens into a single one
+        if tokens[N-1][-1] != ')':
+            # The last token does not have params
+            event.name = tokens[0].lower()
+            for t in tokens[1:]:
                 event.name += t.capitalize()
+        else: # The last token has params
+            if N == 1:
+                splits = tokens[-1].split('(')
+                print(N, splits)
+                event.name = splits[0]
+                event.params = splits[1][:-1].split(',')
             else:
-                event.name += t.upper() + 'const& ' + t + ','
+                event.name = tokens[0].lower()
+                for t in tokens[1:-1]:
+                    event.name += t.capitalize()
+                splits = tokens[N-1].split('(')
+                print(N, splits)
+                event.name += splits[0].capitalize()
+                event.params = splits[1][:-1].split(',')
 
     ###########################################################################
     ### Parse the following plantUML code and store information of the analyse:
@@ -1035,17 +1043,18 @@ class Parser(object):
 
         # Analyse the following optional plantUML code: ": event [ guard ] / action"
         for i in range(3, len(self.tokens)):
-            if self.tokens[i] == 'event':
-                self.parse_event(tr.event, self.tokens[i + 1])
+            if self.tokens[i] == '#event':
+                N = int(self.tokens[i+1])
+                self.parse_event(tr.event, self.tokens[i+2:i+2+N])
                 # Events are optional. If not given, we use them as anonymous internal event.
                 # Store them in a dictionary: "event => (origin, destination) states" to create
                 # the state transition for each event.
                 self.lookup_events[tr.event].append((tr.origin, tr.destination))
-            elif self.tokens[i] == 'guard':
+            elif self.tokens[i] == '#guard':
                 tr.guard = self.tokens[i + 1][1:-1].strip() # Remove [ and ]
-            elif self.tokens[i] == 'uml_action':
+            elif self.tokens[i] == '#uml_action':
                 tr.action = self.tokens[i + 1][1:].strip() # Remove /
-            elif self.tokens[i] == 'std_action':
+            elif self.tokens[i] == '#std_action':
                 tr.action = self.tokens[i + 1][6:].strip() # Remove \n--\n
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
@@ -1101,8 +1110,13 @@ class Parser(object):
         elif what in ['on', 'event']:
             self.tokens = [ name, '->', name ]
             for i in range(1, len(inst.children)):
-                self.tokens.append(str(inst.children[i].data))
-                self.tokens.append(str(inst.children[i].children[0]))
+                self.tokens.append('#' + str(inst.children[i].data))
+                if inst.children[i].data != 'event':
+                    self.tokens.append(str(inst.children[i].children[0]))
+                else:
+                    self.tokens.append(str(len(inst.children[i].children)))
+                    for j in inst.children[i].children:
+                        self.tokens.append(str(j))
             self.parse_transition(True)
         else:
             self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
@@ -1169,9 +1183,14 @@ class Parser(object):
             self.tokens = [str(inst.children[0]), str(inst.children[1]),
                            str(inst.children[2])]
             for i in range(3, len(inst.children)):
-                self.tokens.append(str(inst.children[i].data))
-                self.tokens.append(str(inst.children[i].children[0]))
-            self.parse_transition()
+                self.tokens.append('#' + str(inst.children[i].data))
+                if inst.children[i].data != 'event':
+                    self.tokens.append(str(inst.children[i].children[0]))
+                else:
+                    self.tokens.append(str(len(inst.children[i].children)))
+                    for j in inst.children[i].children:
+                        self.tokens.append(str(j))
+            self.parse_transition(False)
         elif inst.data[0:6] == 'state_':
             self.parse_state(inst)
         elif inst.data in ['comment', 'skin', 'hide']:

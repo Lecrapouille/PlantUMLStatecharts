@@ -38,7 +38,8 @@ state_comment: STATE ":" "comment" action? "\n"
 transition: STATE ARROW STATE (":" event? guard? action?)? "\n"
 
 // Event syntax can be 'foo bar toto(param1, param2)' tokens will be concat
-event: CNAME+ ( /\([^)]*\)/ )?
+// event: /[a-zA-Z][a-zA-Z0-9_]*(\(.*\))?/
+event: CNAME+ (/\(.*\)/)?
 // Guard syntax is [ boolean C++ logic ]
 guard : /\[.+\]/
 // UML action syntax is / C++ logic
