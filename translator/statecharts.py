@@ -926,16 +926,26 @@ class Parser(object):
         for e in self.lookup_events:
             if e.name != '':
                 return
+        self.warning('The state machine shall have at least one event.')
 
-        cycle = list(nx.simple_cycles(self.graph))
-        if len(cycle) == 0:
-            self.warning('The state machine shall have at least one event.')
-            return
-        str = ''
-        for c in cycle[0]:
-            str += ' ' + c
-        self.warning('The state machine shall have at least one event to prevent infinite loop. ' +
-                     'For example:' + str)
+    ###########################################################################
+    ### Check infinite loops
+    ###########################################################################
+    def verify_infinite_loops(self):
+        cycles = list(nx.simple_cycles(self.graph))
+        for cycle in cycles:
+            find = True
+            if len(cycle) == 1:
+                find = False
+                continue
+            for i in range(len(cycle) - 1):
+                if self.graph[cycle[i]][cycle[i+1]]['data'].event.name != '':
+                    find = False
+                    break
+            if find == True:
+                str = ' '.join(cycle) + ' ' + cycle[0]
+                self.warning('The state machine has an infinite loop: ' + str + '. Add an event!')
+                return
 
     ###########################################################################
     ### Verify for each state if transitions are dereminist.
@@ -985,6 +995,7 @@ class Parser(object):
     def finalize_machine(self):
         self.is_state_machine_determinist()
         self.manage_noevents()
+        self.verify_infinite_loops()
 
     ###########################################################################
     ### Parse an event.
