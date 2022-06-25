@@ -1,26 +1,32 @@
 # PlantUML Statecharts (State Machine) Translator
 
 This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python
-3 script for generating finite state machines (FSM) in C++14 code from [PlantUML
+v3 script for generating finite state machines (FSM) in C++11 from [PlantUML
 statecharts](https://plantuml.com/fr/state-diagram):
 - The generated code is a compromise between simplicity to read, no virtual
   methods, memory foot print.
-- The script does some basic verification to check if your state machine is well
-  form.
-- The script also generates C++ unit tests (in [Google
+- The tool does some basic verification to check if your state machine is well
+  formed.
+- The tool also generates C++ unit tests (in [Google
   tests](https://github.com/google/googletest)) to verify if your state machine
   is functional.
+- The goal of this tool is to separated things: one part manages the logic of
+  how a state machine shall work, the second part is to write code in a
+  descriptive way.
 
-Example of statecharts the tool can parse:
+Here an example of state machine with all the syntax the tool is able to parse:
 
-![alt statemachine](doc/RichMan.png)
+![alt statemachine](doc/Gumball.png)
 
-This repository contains several [examples](examples) of FSM.
+This repository also contains several more evolved
+[examples](examples/README.md) of statecharts the tool can parse. For people not
+sure on how state machines work, there are several links on courses in the last
+section of this document.
 
 ## Limitation: what the tools cannot offer to you
 
-- Parsing Hierarchic State Machine (HSM). It only parses simple Finite State
-  Machine (FSM). I'm thinking on how to upgrade this tool.
+- Parsing Hierarchic State Machine (HSM). Currently, the tool only parses simple
+  Finite State Machine (FSM). I'm thinking on how to upgrade this tool.
 - For FSM, the tool does not parse fork, concurrent states, composite states,
   pseudo states, history.
 - For FSM, the `do / activity` and `after(X ms)` are not yet managed.
@@ -38,7 +44,7 @@ This repository contains several [examples](examples) of FSM.
   be mutually exclusive but the tool cannot parse C++ logic. And finally for
   unit test, to help generating good values
 - Does not give 100% of compilable C++ code source. It depends on the code of
-  your gards and actions. It should be simple valid C++ code. The main code of
+  your guards and actions. It should be simple valid C++ code. The main code of
   the generated state machine is functional you do not have to modify it but you
   may have to clean a little the code for your gards, actions, add member
   variables to complete the compilation.
@@ -55,8 +61,8 @@ This repository contains several [examples](examples) of FSM.
 - [Networkx](https://networkx.org/) before the PlantUML is translated into C++
   file, a directed graph structure is created as intermediate structure before
   generating the C++ code (shall be ideally a MultiDiGraph).
-- [PlantUML](https://plantuml.com) install this tool. It is not strictly important
-  for this project it only called to generated PNG files of examples.
+- [PlantUML](https://plantuml.com) to generate pictures of examples (Makefile)
+  and it is not used by our tool.
 
 ```
 python3 -m pip install networkx lark
@@ -83,10 +89,16 @@ Example:
 
 Will create a `FooController.cpp` file with a class name `FooController`.
 
-## Examples
+## Compile Examples
 
 ```
 cd examples
+make -j8
+```
+
+Examples are compiled into the `build` folder. You can run binaries. For example:
+```
+./build/Gumball
 ```
 
 ## PlantUML Statecharts syntax
@@ -212,40 +224,76 @@ The translating process pipeline of the Python script is the following:
   formed ...), to generate the C++ code source and to generate unit tests from
   graph cycles or graph paths from source to sinks ...
 
-How is the generated code ?
-- The state machine, like any graph structure (nodes are states and edges are
-  transitions) can be depicted by a matrix. For the first example (guards and
-  actions are not showned):
+How is the generated code ? The state machine, like any graph structure (nodes
+are states and edges are transitions) can be depicted by a matrix.
 
-| States \ events | Get quarter   |                        |
-|-----------------|---------------|------------------------|
-| FIND_QUARTER    | COUNT_QUARTER |                        |
-| COUNT_QUARTER   |               | FIND_QUARTER or YOUPII |
-| YOUPII          |               | FIND_QUARTER           |
+For example concerning the motor controller:
 
-The first column holds source states (origin). The first row holds events.  For
-each event (therefore for each column) each matrix cell holds the destination
-state. The third column has no event, and the consequence is that the state is
-immediatly switched. In practice the table is usally sparse. Our
-implementation is following this
-[project](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2):
-- A private static array holds states and their entry/exit actions (pointers to
-  private methods).
+![alt motor](doc/Motor.png)
+
+can be depicted by the following table (guards and actions are not
+showed). In practice the table is usually sparse:
+
+|                 | Set Speed  | Halt      | --        |
+|-----------------|------------|-----------|-----------|
+| IDLE            | STARTING   |           |           |
+| STOPPING        |            |           | IDLE      |
+| STARTING        | SPINNING   | STOPPING  |           |
+| SPINNING        | SPINNING   | STOPPING  |           |
+
+- The first column holds source states (origin).
+- The first row holds events.
+- For each event (therefore for each column) each matrix cell holds the
+  destination state. The third column has no event, and the consequence is that
+  the state is immediately switched.
+
+Our implementation is the following:
+- A private fixed-size array holds states and their entry/exit actions (pointers
+  to private methods).
 - Events are public methods. In each of them a static lookup table (a `std::map`
-  for the sparse side) mapping transitions from source states to destination
-  states shall be defined. This table also holds pointers to private methods for
-  the guards and for actions. This table is used by a general private method
-  doing all statechart logic suggested by the UML norm (actions,
-  transitions ...).
-- The norm says that events shall be mutually exclusive, since we are dealing in
-  discrete time event, several events can occured during the delta time. But since
-  the API of C++ state machine only offers public method to triggers the event, the
-  exclusion shall be made uphill (by the caller function).
+  for the sparse side) maps transitions (source states to destination states)
+  shall be defined. This table also holds pointers to private methods for the
+  guards and for actions. This table is used by a general private method doing
+  all statecharts logic to follow the UML norm.
+- The norm says that events shall be mutually exclusive (since we are dealing in
+  discrete time event, several events can occurred during the delta time). But
+  since the API of C++ state machine only offers public method to triggers the
+  event, the exclusion shall be made uphill (by the caller function).
+- The code is based on this
+  [project](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2)
+  but with several diffrences described:
+  - The code uses the curiously recurring template pattern to use the child
+    state machine class and use external enums for defining states (internal
+    enums was not possible).
+  - Actions and guards are placed on transitions.
+  - Transition are parameters to the main function doing the logic of the state
+    machine (transitions, calling guards and actions).
+  - I also merge internal and external transition into a single function. I also
+    use an internal queue.
 
 ## References
 
 - [Yakindu statecharts](https://www.itemis.com/en/yakindu/state-machine/documentation/user-guide/overview_what_are_state_machines)
+  YAKINDU Statechart Tools is a tool for specializing and developing state machines.
 - [Developing Reactive Systems Using Statecharts](http://msdl.cs.mcgill.ca/people/hv/teaching/MoSIS/lectures/StatechartsModellingAndSimulation.pdf)
+  an well made English course to statecharts.
+- [Modeliser les vues dynamiques d'un systeme](http://niedercorn.free.fr/iris/iris1/uml/uml09.pdf)
+  an introduction to UML statecharts in French.
+- [ML/SysML Diagramme d'etat Programmation Arduino](https://eduscol.education.fr/sti/ressources_pedagogiques/umlsysml-diagramme-detat-et-programmation-arduino#fichiers-liens)
+  a French course to statecharts with open source code source. The API is simple
+  to read (while not enough self protecting in my taste) but is the only one I
+  saw offering HSM, activities, history, ...
 - [State Machine Design in C++](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2)
+  The C++ code of our state machine is inspired by this project.
 - [Towards Efficient Code Synthesis from Statecharts](https://cs.emis.de/LNI/Proceedings/Proceedings07/TowardEfficCode_3.pdf)
+  Research paper on how to generate state machine.
+- [Real-Time Structured methods: Systems Analysis](https://www.amazon.com/Real-Time-Structured-Methods-Analysis-Engineering/dp/0471934151)
+  by Keith Edwards, Edition Wiley 1993.SART can be seem as the ancestor of UML
+  in where mainly three diagrams are used: -- diagrams describing how data
+  (information) are transformed (discrete and continuous) -- diagrams describing
+  how data flow is controlled: processes from the first diagram are enabled,
+  disabled or triggered, -- and finally diagrams describing behavior over time:
+  they are mainly depicted by a state transition diagram (therefore a state
+  machine) describing how the control flow (second diagram) controls the data
+  flow (first diagram).
 - [Sructured Analysis for Real Time](https://www.espacetechnologue.com/wp-content/uploads/2017/03/2_DeveloppementApp_STRv11.pdf)
