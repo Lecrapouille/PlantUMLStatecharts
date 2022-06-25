@@ -520,8 +520,8 @@ class Parser(object):
             for origin, destination in arcs:
                 tr = self.graph[origin][destination]['data']
                 self.indent(3), self.fd.write('{\n')
-                self.indent(3), self.fd.write(self.enum_name + '::' + self.state_name(origin) + ',\n')
-                self.indent(3), self.fd.write('{\n')
+                self.indent(4), self.fd.write(self.enum_name + '::' + self.state_name(origin) + ',\n')
+                self.indent(4), self.fd.write('{\n')
                 self.indent(5), self.fd.write(self.enum_name + '::' + self.state_name(destination) + ',\n')
                 if tr.guard != '':
                     self.indent(5), self.fd.write('&' + self.class_name + '::onGuardingTransition')
