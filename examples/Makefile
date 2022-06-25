@@ -111,7 +111,7 @@ clean:
 	$(Q)rm -fr $(BUILD)
 
 # Create the directory before compiling sources
-$(TARGETS): | $(BUILD)
+$(TARGETS) $(BUILD)/statecharts.ebnf: | $(BUILD)
 $(BUILD):
 	@mkdir -p $(BUILD)
 
