@@ -560,7 +560,11 @@ class Parser(object):
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
                 self.indent(1), self.fd.write('MOCKABLE void onTransitioning' + self.state_name(origin) + '_' + self.state_name(destination) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[TRANSITION ' + origin + ' --> ' + destination + ': ' + tr.action + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[TRANSITION ' + origin + ' --> ' + destination)
+                if tr.action[0:2] != '//':
+                    self.fd.write(': ' + tr.action + ']\\n");\n')
+                else: # Cannot display action since contains comment + warnings
+                    self.fd.write(']\\n");\n')
                 self.indent(2), self.fd.write(tr.action + ';\n')
                 self.indent(1), self.fd.write('}\n\n')
 
@@ -1061,8 +1065,9 @@ class Parser(object):
             if as_state and (tr.origin == tr.destination):
                 if tr.action == '':
                     tr.action = '// Dummy action\n'
-                    tr.action += '#warning "no state ' + tr.origin
-                    tr.action += ' reaction to event ' + tr.event.name + '"'
+                    tr.action += '#warning "no reaction to event ' + tr.event.name
+                    tr.action += ' for internal transition ' + tr.origin + ' -> '
+                    tr.action += tr.origin + '"\n'
 
         # Store parsed information as edge of the graph
         self.add_transition(tr)
