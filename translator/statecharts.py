@@ -112,6 +112,9 @@ class Transition(object):
         self.guard = ''
         # Action code (C++ code or pseudo code)
         self.action = ''
+        # Expected number of times the mock is called
+        self.count_guard = 0
+        self.count_action = 0
 
     def __str__(self):
         return self.origin + ' ==> ' + self.destination + ' : ' + \
@@ -136,8 +139,11 @@ class State(object):
         self.entering = ''
         # Action to perform when leaving the state.
         self.leaving = ''
-        # state : do / activity
+        # state : do / activity.
         self.activity = ''
+        # Expected number of times the mock is called0
+        self.count_entering = 0
+        self.count_leaving = 0
 
     def __str__(self):
         return self.name + ': ' + self.entering + ' / ' + self.leaving
@@ -525,6 +531,16 @@ class Parser(object):
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
+    ### Generate the code of the state machine destructor method.
+    ###########################################################################
+    def generate_destructor_method(self):
+        self.fd.write('#if defined(MOCKABLE)\n')
+        self.generate_method_comment('Needed because of virtual methods')
+        self.indent(1)
+        self.fd.write('virtual ~' + self.class_name + '(' + self.extra_code.argvs + ') = default;\n')
+        self.fd.write('#endif\n\n')
+
+    ###########################################################################
     ### Generate the state machine start method (equivalent to a reset).
     ###########################################################################
     def generate_reset_method(self):
@@ -633,6 +649,7 @@ class Parser(object):
         self.fd.write('{\n')
         self.fd.write('public: // Constructor and external events\n\n')
         self.generate_constructor_method()
+        self.generate_destructor_method()
         self.generate_reset_method()
         self.generate_event_methods()
         self.fd.write('private: // Guards and actions on transitions\n\n')
@@ -651,6 +668,7 @@ class Parser(object):
         self.fd.write('#include <gmock/gmock.h>\n')
         self.fd.write('#include <gtest/gtest.h>\n')
         self.fd.write('#include <cstring>\n\n')
+        self.fd.write('using namespace ::testing;\n\n')
         self.fd.write(self.extra_code.unit_tests)
         if self.extra_code.unit_tests != '':
             self.fd.write('\n')
@@ -686,6 +704,48 @@ class Parser(object):
         self.fd.write('};\n\n')
 
     ###########################################################################
+    ### Reset mock counters.
+    ###########################################################################
+    def reset_mock_counters(self):
+        transitions = list(self.graph.edges)
+        for origin, destination in transitions:
+            tr = self.graph[origin][destination]['data']
+            if tr.guard != '':
+                tr.count_guard = 0
+            if tr.action != '':
+                tr.count_action = 0
+        nodes = list(self.graph.nodes)
+        for node in nodes:
+            state = self.graph.nodes[node]['data']
+            if state.entering != '':
+                tr.count_entering = 0
+            if state.leaving != '':
+                tr.count_leaving = 0
+
+    ###########################################################################
+    ###
+    ###########################################################################
+    def count_mocked_guards(self, cycle):
+        self.reset_mock_counters()
+        for i in range(len(cycle) - 1):
+            self.graph[cycle[i]][cycle[i+1]]['data'].count_guard += 1
+
+    ###########################################################################
+    ### Generate mock guards.
+    ###########################################################################
+    def generate_mocked_guards(self):
+        transitions = list(self.graph.edges)
+        for origin, destination in transitions:
+            tr = self.graph[origin][destination]['data']
+            if tr.guard == '':
+                continue
+            self.fd.write('    EXPECT_CALL(fsm, ' + self.guard_function(origin, destination) + '())')
+            if tr.count_guard == 0:
+                self.fd.write('.WillRepeatedly(Return(false));\n')
+            else:
+                self.fd.write('.WillRepeatedly(Return(true));\n')
+
+    ###########################################################################
     ### Generate checks on initial state.
     ### Initial state may have several transitions.
     ###########################################################################
@@ -712,7 +772,7 @@ class Parser(object):
         self.indent(1), self.fd.write('LOGD("Check initial state after constructor or reset.\\n");\n')
         self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
         self.indent(1), self.fd.write(self.class_name + ' ' + 'fsm; // Not mocked !\n')
-        self.indent(1), self.fd.write('fsm.start();\n')
+        self.indent(1), self.fd.write('fsm.start();\n\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
 
@@ -723,6 +783,7 @@ class Parser(object):
         count = 0
         cycles = self.graph_cycles()
         for cycle in cycles:
+            self.count_mocked_guards(cycle)
             self.generate_line_separator(0, ' ', 80, '-')
             self.fd.write('TEST(' + self.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
             count += 1
@@ -736,6 +797,7 @@ class Parser(object):
 
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
+            self.generate_mocked_guards()
             self.indent(1), self.fd.write('fsm.start();\n\n')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
 
@@ -750,7 +812,7 @@ class Parser(object):
                         if tr.guard != '':
                             self.fd.write(' // If ' + tr.guard)
                         self.fd.write('\n')
-                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i]) + ');\n')
                         self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
 
@@ -771,14 +833,14 @@ class Parser(object):
                         self.indent(1), self.fd.write('#warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
-                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                         self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
             self.fd.write('}\n\n')
@@ -790,6 +852,7 @@ class Parser(object):
         count = 0
         pathes = self.graph_all_paths_to_sinks()
         for path in pathes:
+            self.count_mocked_guards(path)
             self.generate_line_separator(0, ' ', 80, '-')
             self.fd.write('TEST(' + self.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
             count += 1
@@ -803,6 +866,7 @@ class Parser(object):
 
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
+            self.generate_mocked_guards()
             self.indent(1), self.fd.write('fsm.start();\n')
 
             # Iterate on all nodes of the path
@@ -815,11 +879,11 @@ class Parser(object):
                         self.fd.write(' // If ' + guard)
                     self.fd.write('\n')
                 if (i == len(path) - 2):
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
             self.fd.write('}\n\n')
