@@ -965,9 +965,9 @@ class Parser(object):
         states = list(set(states))
 
         # Generate the internal transition in the entry action of the source state
-        code = ''
         for state in states:
             count = 0 # count number of ways
+            code = ''
             for dest in list(self.graph.neighbors(state)):
                 tr = self.graph[state][dest]['data']
                 s = self.state_name(state)
