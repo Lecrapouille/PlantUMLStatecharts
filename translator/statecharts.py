@@ -248,14 +248,6 @@ class Parser(object):
         sys.exit(-1)
 
     ###########################################################################
-    ### Helper to raise an exception with a given and the current line where
-    ### the error happened.
-    ###########################################################################
-    def parse_error(self, msg):
-        print(f"{bcolors.FAIL}   Failed parsing " + self.name + " at line " + \
-              str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
-        sys.exit(-1)
-
     ### Add a graph node with a dummy attribute named 'data' of type State.
     ### The node is created if and only if it does not belong to the graph.
     ### param[in] name the name of the state.
@@ -472,8 +464,6 @@ class Parser(object):
     def generate_table_states(self, states):
         empty = True
         for state in states:
-            if 'data' not in self.graph.nodes[state]:
-                continue
 
             s = self.graph.nodes[state]['data']
             if (s.entering == '') and (s.leaving == ''):
@@ -596,8 +586,6 @@ class Parser(object):
     def generate_states_states_reactions(self):
         nodes = list(self.graph.nodes)
         for node in nodes:
-            if 'data' not in self.graph.nodes[node]:
-                continue
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
@@ -945,7 +933,7 @@ class Parser(object):
     ###########################################################################
     def verify_initial_state(self):
         if self.initial_state == '':
-            self.parse_error('Missing initial state')
+            self.fatal('Missing initial state')
 
     ###########################################################################
     ### Count the total number of events which shall be > 1
@@ -1164,7 +1152,7 @@ class Parser(object):
                         self.tokens.append(str(j))
             self.parse_transition(True)
         else:
-            self.parse_error('Bad syntax describing a state. Unkown token "' + what + '"')
+            self.fatal('Bad syntax describing a state. Unkown token "' + what + '"')
 
     ###########################################################################
     ### Extend the PlantUML single-line comments to add extra commands to help
