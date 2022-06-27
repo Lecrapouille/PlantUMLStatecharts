@@ -29,7 +29,7 @@ import sys, os, re, itertools
 import networkx as nx
 
 ###############################################################################
-### Colorful print
+### Console color for print
 ###############################################################################
 class bcolors:
     HEADER = '\033[95m'
@@ -45,16 +45,23 @@ class bcolors:
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML event.
 ### Example of PlantUML events:
+###    getQuarter
+###    getQuarter()
 ###    get quarter
+###    get quarter()
 ###    setSpeed(x)
+###    fooBar(x, y)
 ###############################################################################
 class Event(object):
     def __init__(self):
         # Unique name of the event
         self.name = ''
-        # List of params
+        # List of optional arguments (data to the event)
         self.params = []
 
+    ###########################################################################
+    ### Generate the definition of the C++ method.
+    ###########################################################################
     def header(self):
         if self.name == '':
             return 'void noEvent()'
@@ -66,6 +73,9 @@ class Event(object):
             params += p.upper() + ' const& ' + p
         return 'void ' + self.name + '(' + params + ')'
 
+    ###########################################################################
+    ### Generate the call of the C++ method.
+    ###########################################################################
     def caller(self):
         if self.name == '':
             return 'noEvent()'
@@ -104,7 +114,7 @@ class Transition(object):
         self.origin = ''
         # Destination state (upper case)
         self.destination = ''
-        # Event name
+        # Event name and arguments
         self.event = Event()
         # Guard code (boolean expression)
         self.guard = ''
@@ -118,10 +128,11 @@ class Transition(object):
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML state.
 ### Example of PlantUML state:
-###     state : on event [ guard ] / action
 ###     state : entry / action
 ###     state : exit / action
 ###     state : do / activity
+###     state : on event [ guard ] / action (note this case will be converted
+### into a graph edge instead of graph node).
 ###############################################################################
 class State(object):
     def __init__(self, name):
@@ -140,25 +151,25 @@ class State(object):
         return self.name + ': ' + self.entering + ' / ' + self.leaving
 
 ###############################################################################
-### Add some extra C++ code in the generated code.
+### Structure holding extra C++ code to be merged within the generated code.
 ###############################################################################
 class ExtraCode(object):
-
-    ###########################################################################
-    ### Default dummy constructor.
-    ###########################################################################
     def __init__(self):
-        # Add code on the footer of the code before the class definition.
+        # Code to be placed on the header of the generated code (before the
+        # state machine class definition).
         self.header = ''
-        # Add code on the footer of the code after the class definition.
+        # Code to be placed on the footer of the generated code (after the
+        # state machine class definition).
         self.footer = ''
-        # Add argument to constructor
+        # Arguments to the state machine class constructor method.
         self.argvs = ''
-        # Add code for the class constructor, reset.
+        # Code to be placed inside the class constructor method and the reset
+        # method.
         self.init = ''
-        # Add member functions and member variables in the class.
+        # Code to be placed inside the state machine class to define extra
+        # member functions and extra member variables.
         self.functions = ''
-        # Prepare the code for unit tests
+        # Code to be placed inside the unit tests file to prepare tests.
         self.unit_tests = ''
 
 ###############################################################################
@@ -167,54 +178,51 @@ class ExtraCode(object):
 ### See https://plantuml.com/fr/state-diagram
 ###############################################################################
 class Parser(object):
-
-    ###########################################################################
-    ### Default dummy constructor.
-    ###########################################################################
     def __init__(self):
-        # Context-free language parser
+        # Context-free language parser (Lark lib)
         self.parser = None
-        # Abstract Syntax Tree
+        # Abstract Syntax Tree (Lark lib)
         self.ast = None
-        # File descriptor of the plantUML file.
-        self.fd = None
-        # Name of the plantUML file.
-        self.name = ''
-        # The name of the C++ state machine class.
-        self.class_name = ''
-        # The name of the C++ state machine enum.
-        self.enum_name = ''
-        # List of tokens split line by line.
+        # List of tokens split from the AST (ugly hack !!!).
         self.tokens = []
-        # List Cache the current line to display in error messages.
-        self.lines = 0
-        # Dictionnary of "event => (source, destination) states" needed to
-        # compute tables of state transitions for each events.
-        self.lookup_events = defaultdict(list)
-        # Store all parsed information from plantUML file as a graph.
+        # File descriptor of the opened file (plantUML, generated files).
+        self.fd = None
+        # Name of the plantUML file (input of the tool).
+        self.name = ''
+        # The name of the generated C++ state machine class.
+        self.class_name = ''
+        # The name of the generated C++ state machine enum.
+        self.enum_name = ''
+        # Store the graph of the state machine.
         # FIXME shall be nx.MultiDiGraph() since we cannot create several events
         # leaving and entering to the same state or two events from a source
         # state going to the same destination state.
         self.graph = nx.DiGraph()
-        # Initial / final states
+        # Dictionnary of "event => (source state, destination state)" needed for
+        # computing tables of state transitions for each events.
+        self.lookup_events = defaultdict(list)
+        # Memorize the initial state of the state machine.
         self.initial_state = ''
+        # Memorize the final state of the state machine.
         self.final_state = ''
-        # Extra C++ code
+        # Extra C++ code to be merged inside the generated file.
         self.extra_code = ExtraCode()
-        # Generate C++ warnings when missformed state machine is detected
+        # Generate C++ warnings inside the generated file when missformed state
+        # machine is detected.
         self.warnings = ''
 
     ###########################################################################
     ### Reset states.
-    ### Note: self.parser is not reloaded since useless.
+    ### Note: self.parser is not reloaded since we only parse statecharts.
     ###########################################################################
     def reset(self):
-        self.tokens = []
         self.ast = None
-        self.line = ''
-        self.lines = 0
-        self.lookup_events = defaultdict(list)
+        self.tokens = []
+        self.name = ''
+        self.class_name = ''
+        self.enum_name = ''
         self.graph = nx.DiGraph() # TODO nx.MultiDiGraph()
+        self.lookup_events = defaultdict(list)
         self.initial_state = ''
         self.final_state = ''
         self.extra_code = ExtraCode()
@@ -222,13 +230,16 @@ class Parser(object):
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
+    ### param[in] file path of the file to be generated.
+    ### return True if the file extension matches for a C++ header file.
     ###########################################################################
     def is_hpp_file(self, file):
         filename, extension = os.path.splitext(file)
         return True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
 
     ###########################################################################
-    ### Print a warning message
+    ### Print a warning message on the console.
+    ### param[in] msg the message to print.
     ###########################################################################
     def warning(self, msg):
         self.warnings += msg
@@ -236,7 +247,8 @@ class Parser(object):
               + ": "  + msg + f"{bcolors.ENDC}")
 
     ###########################################################################
-    ### Print an error message and exit
+    ### Print a general error message on the console and exit the application.
+    ### param[in] msg the message to print.
     ###########################################################################
     def fatal(self, msg):
         print(f"{bcolors.FAIL}   FATAL in the state machine " + self.name + \
@@ -252,24 +264,28 @@ class Parser(object):
               str(self.lines) + ": " + msg + f"{bcolors.ENDC}")
         sys.exit(-1)
 
-    ###########################################################################
-    ### Add a state as graph node with its attribute if and only if it does not
-    ### belong to this graph structure.
+    ### Add a graph node with a dummy attribute named 'data' of type State.
+    ### The node is created if and only if it does not belong to the graph.
+    ### param[in] name the name of the state.
     ###########################################################################
     def add_state(self, name):
         if not self.graph.has_node(name):
             self.graph.add_node(name, data = State(name))
 
     ###########################################################################
-    ### Add a transition as graph arc with its attribute.
+    ### Add a graph edge with the given attribute named 'data' of type Transition
+    ### Note: the graph source node and the graph source destination shall have
+    ### been inserted first.
+    ### param[in] tr the state machine transition.
     ###########################################################################
     def add_transition(self, tr):
         self.graph.add_edge(tr.origin, tr.destination, data=tr)
 
     ###########################################################################
-    ### Return cycles in the graph.
+    ### Return all cycles in the graph (list of list of nodes).
     ### Cycles may not start from initial state, therefore do some permutation
-    ### to be sure to start by the initial state.
+    ### are made to be sure to give a list starting with the initial state.
+    ### return list of list of nodes.
     ###########################################################################
     def graph_cycles(self):
         # Cycles may not start from initial state, therefore do some permutation
@@ -290,13 +306,15 @@ class Parser(object):
         return cycles
 
     ###########################################################################
-    ### Iterate over edges in a depth-first-search (DFS).
+    ### Return the list of graph edges in a depth-first-search (DFS).
     ###########################################################################
     def graph_dfs(self):
          return list(nx.dfs_edges(self.graph, source=self.initial_state))
 
     ###########################################################################
-    ### Get all paths from all sources to sinks
+    ### Return all paths from all sources to sinks (list of list of nodes).
+    ### This is a general algorithm since a state machine starts from a single
+    ### entry node.
     ###########################################################################
     def graph_all_paths_to_sinks(self):
          all_paths = []
@@ -308,7 +326,11 @@ class Parser(object):
          return all_paths
 
     ###########################################################################
-    ### Code generator: add a separator line for function.
+    ### Generate a separator line for function.
+    ### param[in] spaces the number of spaces char to print.
+    ### param[in] the space character to print.
+    ### param[in] count the number of character to print a line of comment.
+    ### param[in] c the comment line character to print.
     ###########################################################################
     def generate_line_separator(self, spaces, s, count, c):
         self.fd.write(s * spaces)
@@ -317,7 +339,12 @@ class Parser(object):
         self.fd.write('\n')
 
     ###########################################################################
-    ### Code generator: add a function  or methodcomment.
+    ### Generate a function or a method comment with its text and lines as
+    ### separtor. Comment separator follows the comment size (80 as min size).
+    ### param[in] spaces the number of spaces char to print.
+    ### param[in] the space character to print.
+    ### param[in] comment the message in the comment.
+    ### param[in] c the comment line character to print.
     ###########################################################################
     def generate_comment(self, spaces, s, comment, c):
         final_comment = ('//! \\brief')
@@ -334,7 +361,7 @@ class Parser(object):
         self.generate_line_separator(spaces, s, N, c)
 
     ###########################################################################
-    ### Code generator: add a dummy function comment.
+    ### Generate function comment with its text.
     ###########################################################################
     def generate_function_comment(self, comment):
         self.generate_comment(0, ' ', comment, '*')
@@ -347,9 +374,10 @@ class Parser(object):
 
     ###########################################################################
     ### Identation.
+    ### param[in] count the depth of indentation.
     ###########################################################################
-    def indent(self, count):
-        self.fd.write(' ' * 4 * count)
+    def indent(self, depth):
+        self.fd.write(' ' * 4 * depth)
 
     ###########################################################################
     ### You can add here your copyright, license ...
@@ -362,7 +390,7 @@ class Parser(object):
 
     ###########################################################################
     ### Code generator: add the header file.
-    ### TODO include or insert custom header like done with flex/bison
+    ### param[in] hpp set to True if generated file is a C++ header file.
     ###########################################################################
     def generate_header(self, hpp):
         self.generate_common_header()
@@ -378,7 +406,7 @@ class Parser(object):
 
     ###########################################################################
     ### Code generator: add the footer file.
-    ### TODO include or insert custom footer like done with flex/bison
+    ### param[in] hpp set to True if generated file is a C++ header file.
     ###########################################################################
     def generate_footer(self, hpp):
         if self.warnings != '':
@@ -420,7 +448,9 @@ class Parser(object):
         self.indent(1), self.fd.write('return s_states[state];\n};\n\n')
 
     ###########################################################################
-    ### Convert the state name
+    ### Convert the state name (PlantUML name to C++ name)
+    ### param[in] state the PlantUML name of the state.
+    ### return the C++ name.
     ###########################################################################
     def state_name(self, state):
         if state == '[*]':
@@ -473,7 +503,7 @@ class Parser(object):
               'since no state will do actions!\n')
 
     ###########################################################################
-    ### Code generator: add the state machine constructor method.
+    ### Generate the code of the state machine constructor method.
     ###########################################################################
     def generate_constructor(self):
         states = list(self.graph.nodes)
@@ -491,7 +521,7 @@ class Parser(object):
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
-    ### Code generator: add the state machine reset method.
+    ### Generate the state machine start method (equivalent to a reset).
     ###########################################################################
     def generate_reset(self):
         self.generate_method_comment('Reset the state machine.')
@@ -504,7 +534,7 @@ class Parser(object):
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
-    ### Code generator: add all methods associated with external events.
+    ### Generate external events to the state machine (public methods).
     ###########################################################################
     def generate_external_events(self):
         for event, arcs in self.lookup_events.items():
@@ -540,7 +570,7 @@ class Parser(object):
             self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
-    ### Code generator: Transitions reactions.
+    ### Generate guards and actions on transitions.
     ###########################################################################
     def generate_states_transitions_reactions(self):
         transitions = list(self.graph.edges)
@@ -569,7 +599,7 @@ class Parser(object):
                 self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
-    ### Code generator: States reactions.
+    ### Generate leaving and entering actions associated to states.
     ###########################################################################
     def generate_states_states_reactions(self):
         nodes = list(self.graph.nodes)
@@ -594,7 +624,7 @@ class Parser(object):
                 self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
-    ### Code generator: add the state machine class and all its methods.
+    ### Entry point to generate the whole state machine class and all its methods.
     ###########################################################################
     def generate_state_machine_class(self):
         self.generate_function_comment('State machine concrete implementation.')
@@ -613,7 +643,7 @@ class Parser(object):
         self.fd.write('};\n\n')
 
     ###########################################################################
-    ### Generate the header for the unit test file
+    ### Generate the header part of the unit test file.
     ###########################################################################
     def generate_unit_tests_header(self):
         self.generate_common_header()
@@ -627,7 +657,13 @@ class Parser(object):
             self.fd.write('\n')
 
     ###########################################################################
-    ### Generate the mocked class
+    ### Generate the footer part of the unit test file.
+    ###########################################################################
+    def generate_unit_tests_footer(self):
+        pass
+
+    ###########################################################################
+    ### Generate the mocked state machine class.
     ###########################################################################
     def generate_unit_tests_mocked_class(self):
         self.generate_function_comment('Mocked state machine')
@@ -1001,8 +1037,9 @@ class Parser(object):
     ### Parse an event.
     ### TODO for the moment we do not manage boolean expression
     ### TODO manage builtins such as "when(event)" or "after(x)"
+    ### This algorithm is not good ie ['setSpeed', '(refSpeed)']
     ###########################################################################
-    def parse_event(self, event, tokens): # ['setSpeed', '(refSpeed)']
+    def parse_event(self, event, tokens):
         event.params = []
         N = len(tokens)
         if N == 0: # No event
