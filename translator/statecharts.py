@@ -463,7 +463,7 @@ class Parser(object):
     ###########################################################################
     def guard_function(self, source, destination, class_name=False):
         s = self.class_name + '::' if class_name else ''
-        return s + 'onGuardingTransition' + self.state_name(source) + '_' + self.state_name(destination)
+        return s + 'onGuarding_' + self.state_name(source) + '_' + self.state_name(destination)
 
     ###########################################################################
     ### Return the C++ method for transition actions.
@@ -473,20 +473,25 @@ class Parser(object):
     ###########################################################################
     def transition_function(self, source, destination, class_name=False):
         s = self.class_name + '::' if class_name else ''
-        return s + 'onTransitioning' + self.state_name(source) + '_' + self.state_name(destination)
+        return s + 'onTransitioning_' + self.state_name(source) + '_' + self.state_name(destination)
 
     ###########################################################################
-    ### Return the C++ method for state actions.
+    ### Return the C++ method for entering state actions.
     ### param[in] state the PlantUML name of the state.
     ### param[in] entering if True for entering actions else for leaving action.
     ###########################################################################
     def state_entering_function(self, state, class_name=True):
         s = self.class_name + '::' if class_name else ''
-        return s + 'onEnteringState' + self.state_name(state)
+        return s + 'onEntering_' + self.state_name(state)
 
-    def state_leaving_function(self, state, entering):
+    ###########################################################################
+    ### Return the C++ method for leaving state actions.
+    ### param[in] state the PlantUML name of the state.
+    ### param[in] entering if True for entering actions else for leaving action.
+    ###########################################################################
+    def state_leaving_function(self, state, class_name=True):
         s = self.class_name + '::' if class_name else ''
-        return s + 'onLeavingState' + self.state_name(state)
+        return s + 'onLeaving_' + self.state_name(state)
 
     ###########################################################################
     ### Generate the table of states holding their entering or leaving actions.
