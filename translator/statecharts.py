@@ -513,7 +513,9 @@ class Parser(object):
         for state in list(self.graph.nodes):
             s = self.graph.nodes[state]['data']
             # Sparse notation: nullptr are inmplicit so skip it
-            if (s.name == '[*]') or ((s.entering == '') and (s.leaving == '')):
+            if (s.name == '[*]'):
+                continue
+            if s.entering == '' and s.leaving == '' and s.internal == '':
                 continue
             self.indent(2), self.fd.write('m_states[' + self.state_enum(s.name) + '] =\n')
             self.indent(2), self.fd.write('{\n')
@@ -649,7 +651,7 @@ class Parser(object):
 
             if state.leaving != '':
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
-                self.indent(1), self.fd.write('MOCKABLE void ' + self.state_leaving_function(state, False) + '()\n')
+                self.indent(1), self.fd.write('MOCKABLE void ' + self.state_leaving_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
                 self.indent(2), self.fd.write('LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.leaving)
@@ -747,7 +749,7 @@ class Parser(object):
                 state.count_leaving = 0
 
     ###########################################################################
-    ###
+    ### Count the number of times the entering and leaving actions are called.
     ###########################################################################
     def count_mocked_guards(self, cycle):
         self.reset_mock_counters()
@@ -757,12 +759,12 @@ class Parser(object):
                 tr.count_guard += 1
             if tr.action != '':
                 tr.count_action += 1
-        for node in cycle:
-            state = self.graph.nodes[node]['data']
-            if state.entering != '':
-                state.count_entering += 1
-            if state.leaving != '':
-                state.count_leaving += 1
+            source = self.graph.nodes[cycle[i]]['data']
+            if source.leaving != '':
+                source.count_leaving += 1
+            destination = self.graph.nodes[cycle[i+1]]['data']
+            if destination.entering != '':
+                destination.count_entering += 1
 
     ###########################################################################
     ### Generate mock guards.
@@ -845,7 +847,7 @@ class Parser(object):
         count = 0
         cycles = self.graph_cycles()
         for cycle in cycles:
-            self.count_mocked_guards(cycle)
+            self.count_mocked_guards(['[*]'] + cycle)
             self.generate_line_separator(0, ' ', 80, '-')
             self.fd.write('TEST(' + self.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
             count += 1
@@ -860,33 +862,34 @@ class Parser(object):
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards()
-            self.indent(1), self.fd.write('fsm.start();\n\n')
+            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.start();\n')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
+            self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+            self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[0]) + ');\n')
+            self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[0] + '");\n')
 
             # Iterate on all nodes of the cycle
             for i in range(len(cycle) - 1):
-                # External event not leaving the current state
-                if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
-                    tr = self.graph[cycle[i]][cycle[i]]['data']
-                    if tr.event.name != '':
-                        self.indent(1), self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
-                        self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
-                        if tr.guard != '':
-                            self.fd.write(' // If ' + tr.guard)
-                        self.fd.write('\n')
-                        self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
-                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i]) + ');\n')
-                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
+# FIXME
+#                # External event not leaving the current state
+#                if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
+#                    tr = self.graph[cycle[i]][cycle[i]]['data']
+#                    if tr.event.name != '':
+#                        self.indent(1), self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+#                        self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
+#                        if tr.guard != '':
+#                            self.fd.write(' // If ' + tr.guard)
+#                        self.fd.write('\n')
+#                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+#                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i]) + ');\n')
+#                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
 
                 # External event: print the name of the event + its guard
                 tr = self.graph[cycle[i]][cycle[i+1]]['data']
                 if tr.event.name != '':
-                    self.indent(1)
-                    self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
-                    self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
-                    if tr.guard != '':
-                        self.fd.write(' // If ' + tr.guard)
-                    self.fd.write('\n')
+                    self.fd.write('\n'), self.indent(1)
+                    self.fd.write('LOGD("\\nEvent ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';\n')
 
                 if (i == len(cycle) - 2):
                     # Cycle of non external evants => malformed state machine
@@ -895,14 +898,14 @@ class Parser(object):
                         self.indent(1), self.fd.write('#warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
-                        self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                         self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                         self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
             self.fd.write('}\n\n')
@@ -929,23 +932,22 @@ class Parser(object):
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards()
-            self.indent(1), self.fd.write('fsm.start();\n')
+            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.start();\n')
 
             # Iterate on all nodes of the path
             for i in range(len(path) - 1):
                 event = self.graph[path[i]][path[i+1]]['data'].event
                 if event.name != '':
                     guard = self.graph[path[i]][path[i+1]]['data'].guard
-                    self.indent(1), self.fd.write('fsm.' + event.caller() + ';')
-                    if guard != '':
-                        self.fd.write(' // If ' + guard)
-                    self.fd.write('\n')
+                    self.fd.write('\n'), self.indent(1)
+                    self.fd.write('LOGD("\\nEvent ' + event.name + ' [' + guard + ']: ' + path[i] + ' ==> ' + path[i + 1] + '\\n");\n')
+                    self.fd.write('\n'), self.indent(1), self.fd.write('fsm.' + event.caller() + ';\n')
                 if (i == len(path) - 2):
-                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
-                    self.fd.write('\n'), self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
             self.fd.write('}\n\n')
