@@ -63,9 +63,6 @@ class Event(object):
     ### Generate the definition of the C++ method.
     ###########################################################################
     def header(self):
-        if self.name == '':
-            return 'void noEvent()'
-
         params = ''
         for p in self.params:
             if params != '':
@@ -77,9 +74,6 @@ class Event(object):
     ### Generate the call of the C++ method.
     ###########################################################################
     def caller(self):
-        if self.name == '':
-            return 'noEvent()'
-
         i = 0
         params = ''
         for p in self.params:
@@ -87,9 +81,7 @@ class Event(object):
                 params += ', ' + self.name.lower() + '_x[' + str(i) + ']'
                 i += 1
             params += p.lower()
-        if params != '' or self.name[-1] != ')':
-            params = '(' + params + ')'
-        return self.name + params
+        return self.name + '(' + params + ')'
 
     def __hash__(self):
         return hash(self.name)
