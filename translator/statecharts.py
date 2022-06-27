@@ -139,8 +139,10 @@ class State(object):
         self.entering = ''
         # Action to perform when leaving the state.
         self.leaving = ''
-        # state : do / activity.
+        # State activity.
         self.activity = ''
+        # Internal transition when no events are explicitely set.
+        self.internal = ''
         # Expected number of times the mock is called0
         self.count_entering = 0
         self.count_leaving = 0
@@ -494,6 +496,15 @@ class Parser(object):
         return s + 'onLeaving_' + self.state_name(state)
 
     ###########################################################################
+    ### Return the C++ method for internal state transition.
+    ### param[in] state the PlantUML name of the state.
+    ### param[in] entering if True for entering actions else for leaving action.
+    ###########################################################################
+    def state_internal_function(self, state, class_name=True):
+        s = self.class_name + '::' if class_name else ''
+        return s + 'onInternal_' + self.state_name(state)
+
+    ###########################################################################
     ### Generate the table of states holding their entering or leaving actions.
     ### Note: the table may be empty (all states do not actions) in this case
     ### the table is not generated.
@@ -501,22 +512,25 @@ class Parser(object):
     def generate_table_of_states(self):
         for state in list(self.graph.nodes):
             s = self.graph.nodes[state]['data']
-
             # Sparse notation: nullptr are inmplicit so skip it
-            if (s.entering == '') and (s.leaving == ''):
+            if (s.name == '[*]') or ((s.entering == '') and (s.leaving == '')):
                 continue
-
             self.indent(2), self.fd.write('m_states[' + self.state_enum(s.name) + '] =\n')
             self.indent(2), self.fd.write('{\n')
-            if s.entering != '':
-                self.indent(3), self.fd.write('.entering = &')
-                self.fd.write(self.state_entering_function(state, True))
             if s.leaving != '':
                 self.indent(3), self.fd.write('.leaving = &')
                 self.fd.write(self.state_leaving_function(state, True))
+                self.fd.write(',\n')
+            if s.entering != '':
+                self.indent(3), self.fd.write('.entering = &')
+                self.fd.write(self.state_entering_function(state, True))
+                self.fd.write(',\n')
+            if s.internal != '':
+                self.indent(3), self.fd.write('.internal = &')
+                self.fd.write(self.state_internal_function(state, True))
+                self.fd.write(',\n')
             #if s.activity != '':
             #    self.generate_pointer_function('activity', s.name)
-            self.fd.write(',\n')
             self.indent(2), self.fd.write('};\n')
 
     ###########################################################################
@@ -531,8 +545,6 @@ class Parser(object):
         self.indent(1), self.fd.write('{\n')
         self.generate_table_of_states()
         self.fd.write(self.extra_code.init)
-        self.indent(2)
-        self.fd.write(self.state_entering_function(self.initial_state, True) + '();\n')
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -540,7 +552,7 @@ class Parser(object):
     ###########################################################################
     def generate_destructor_method(self):
         self.fd.write('#if defined(MOCKABLE)\n')
-        self.generate_method_comment('Needed because of virtual methods')
+        self.generate_method_comment('Needed because of virtual methods.')
         self.indent(1)
         self.fd.write('virtual ~' + self.class_name + '(' + self.extra_code.argvs + ') = default;\n')
         self.fd.write('#endif\n\n')
@@ -554,8 +566,7 @@ class Parser(object):
         self.indent(1), self.fd.write('{\n')
         self.indent(2), self.fd.write('StateMachine::start();\n')
         self.fd.write(self.extra_code.init)
-        self.indent(2)
-        self.fd.write(self.state_entering_function(self.initial_state, True) + '();\n')
+        self.indent(2), self.fd.write('onInternal_CONSTRUCTOR();\n')
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -644,6 +655,14 @@ class Parser(object):
                 self.fd.write(state.leaving)
                 self.indent(1), self.fd.write('}\n\n')
 
+            if state.internal != '':
+                self.generate_method_comment('Do the internal transition when leaving the state ' + state.name + '.')
+                self.indent(1), self.fd.write('void ' + self.state_internal_function(node, False) + '()\n')
+                self.indent(1), self.fd.write('{\n')
+                self.indent(2), self.fd.write('LOGD("[GUARDING STATE ' + state.name + ']\\n");\n')
+                self.fd.write(state.internal)
+                self.indent(1), self.fd.write('}\n\n')
+
     ###########################################################################
     ### Entry point to generate the whole state machine class and all its methods.
     ###########################################################################
@@ -698,7 +717,7 @@ class Parser(object):
                 self.fd.write('    MOCK_METHOD(bool, ' + self.guard_function(origin, destination))
                 self.fd.write(', (), (override));\n')
             if tr.action != '':
-                self.fd.write('    MOCK_METHOD(bool, ' + self.transition_function(origin, destination))
+                self.fd.write('    MOCK_METHOD(void, ' + self.transition_function(origin, destination))
                 self.fd.write(', (), (override));\n')
         for node in list(self.graph.nodes):
             state = self.graph.nodes[node]['data']
@@ -723,9 +742,9 @@ class Parser(object):
         for node in nodes:
             state = self.graph.nodes[node]['data']
             if state.entering != '':
-                tr.count_entering = 0
+                state.count_entering = 0
             if state.leaving != '':
-                tr.count_leaving = 0
+                state.count_leaving = 0
 
     ###########################################################################
     ###
@@ -733,7 +752,17 @@ class Parser(object):
     def count_mocked_guards(self, cycle):
         self.reset_mock_counters()
         for i in range(len(cycle) - 1):
-            self.graph[cycle[i]][cycle[i+1]]['data'].count_guard += 1
+            tr = self.graph[cycle[i]][cycle[i+1]]['data'];
+            if tr.guard != '':
+                tr.count_guard += 1
+            if tr.action != '':
+                tr.count_action += 1
+        for node in cycle:
+            state = self.graph.nodes[node]['data']
+            if state.entering != '':
+                state.count_entering += 1
+            if state.leaving != '':
+                state.count_leaving += 1
 
     ###########################################################################
     ### Generate mock guards.
@@ -742,13 +771,41 @@ class Parser(object):
         transitions = list(self.graph.edges)
         for origin, destination in transitions:
             tr = self.graph[origin][destination]['data']
-            if tr.guard == '':
-                continue
-            self.fd.write('    EXPECT_CALL(fsm, ' + self.guard_function(origin, destination) + '())')
-            if tr.count_guard == 0:
-                self.fd.write('.WillRepeatedly(Return(false));\n')
-            else:
-                self.fd.write('.WillRepeatedly(Return(true));\n')
+            if tr.guard != '':
+                self.fd.write('    EXPECT_CALL(fsm, ' + self.guard_function(origin, destination) + '())')
+                if tr.count_guard == 0:
+                    self.fd.write('.WillRepeatedly(Return(false));\n')
+                else:
+                    self.fd.write('.WillRepeatedly(Return(true));\n')
+            if tr.action != '':
+                self.fd.write('    EXPECT_CALL(fsm, ' + self.transition_function(origin, destination, False) + '())')
+                self.fd.write('.Times(' + str(tr.count_action) + ');\n')
+        nodes = list(self.graph.nodes)
+        for node in nodes:
+            state = self.graph.nodes[node]['data']
+            if state.entering != '':
+                self.fd.write('    EXPECT_CALL(fsm, ' + self.state_entering_function(node, False) + '())')
+                self.fd.write('.Times(' + str(state.count_entering) + ');\n')
+            if state.leaving != '':
+                self.fd.write('    EXPECT_CALL(fsm, ' + self.state_leaving_function(node, False) + '())')
+                self.fd.write('.Times(' + str(state.count_leaving) + ');\n')
+
+    ###########################################################################
+    ### Generate mock guards.
+    ###########################################################################
+    def generate_mocked_actions(self, cycle):
+        for i in range(len(cycle) - 1):
+            tr = self.graph[cycle[i]][cycle[i+1]]['data'];
+            if tr.guard != '':
+                tr.count_guard += 1
+            if tr.action != '':
+                tr.count_action += 1
+        for node in cycle:
+            state = self.graph.nodes[node]['data']
+            if state.entering != '':
+                state.count_entering += 1
+            if state.leaving != '':
+                state.count_leaving += 1
 
     ###########################################################################
     ### Generate checks on initial state.
@@ -921,7 +978,7 @@ class Parser(object):
         self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
         self.generate_unit_tests_header()
         self.generate_unit_tests_mocked_class()
-        self.generate_unit_tests_check_initial_state()
+        #self.generate_unit_tests_check_initial_state()
         self.generate_unit_tests_check_cycles()
         self.generate_unit_tests_pathes_to_sinks()
         self.generate_unit_tests_main_function(filename)
@@ -961,13 +1018,11 @@ class Parser(object):
         # Make unique the list of states that does not have event on their
         # output edges
         states = []
-        for s in list(self.graph.nodes()):
-            for d in list(self.graph.neighbors(s)):
-                tr = self.graph[s][d]['data']
-                if tr.event.name == '':
-                    states.append(s)
-
-        states = list(set(states))
+        for state in list(self.graph.nodes()):
+            for dest in list(self.graph.neighbors(state)):
+                tr = self.graph[state][dest]['data']
+                if (tr.event.name == '') and (state not in states):
+                    states.append(state)
 
         # Generate the internal transition in the entry action of the source state
         for state in states:
@@ -994,13 +1049,13 @@ class Parser(object):
                     code += '            {\n'
                     code += '                .destination = ' + self.state_enum(dest) + ',\n'
                     if tr.action != '':
-                        code += '                .action = &' + transition_function(state, dest, True) + ',\n'
+                        code += '                .action = &' + self.transition_function(state, dest, True) + ',\n'
                     code += '            };\n'
                     code += '            transition(&tr);\n'
                     code += '            return ;\n'
                     code += '        }\n'
                     count += 1
-            self.graph.nodes[state]['data'].entering += code
+            self.graph.nodes[state]['data'].internal += code
 
     ###########################################################################
     ### The state machine shall have an initial state.

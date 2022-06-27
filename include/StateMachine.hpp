@@ -143,14 +143,17 @@ public:
     //--------------------------------------------------------------------------
     struct State
     {
-        //! \brief Call the "on entry" callback when entering for the first time
-        //! (AND ONLY THE FIRST TIME) in the state. Note: the transition guard
-        //! can prevent calling this function.
-        xFuncPtr entering = nullptr;
         //! \brief Call the "on leaving" callback when leavinging for the first
         //! time (AND ONLY THE FIRST TIME) the state. Note: the guard can
         //! prevent calling this function.
         xFuncPtr leaving = nullptr;
+        //! \brief Call the "on entry" callback when entering for the first time
+        //! (AND ONLY THE FIRST TIME) in the state. Note: the transition guard
+        //! can prevent calling this function.
+        xFuncPtr entering = nullptr;
+        //! \brief The condition validating the event and therefore preventing
+        //! the transition to occur.
+        xFuncPtr internal = nullptr;
     };
 
     //--------------------------------------------------------------------------
@@ -357,22 +360,28 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
             // Transitioning to a new state ?
             if (previous_state != transition->destination)
             {
+                // Do reactions when leaving the current state
                 if (cst.leaving != nullptr)
                 {
                     LOGD("[FSM INTERNALS] Call the state %s 'on leaving' action\n",
                          stringify(previous_state));
-
-                    // Do reactions when leaving the current state
                     (static_cast<FSM*>(this)->*cst.leaving)();
                 }
 
+                // Do reactions when entring into the new state
                 if (nst.entering != nullptr)
                 {
                     LOGD("[FSM INTERNALS] Call the state %s 'on entry' action\n",
                          stringify(transition->destination));
-
-                    // Do reactions when entring into the new state
                     (static_cast<FSM*>(this)->*nst.entering)();
+                }
+
+                // Do internal transitions when no event are present
+                if (nst.internal != nullptr)
+                {
+                    LOGD("[FSM INTERNALS] Call the state %s 'on internal' action\n",
+                         stringify(transition->destination));
+                    (static_cast<FSM*>(this)->*nst.internal)();
                 }
             }
             else

@@ -2,11 +2,23 @@
 skin rose
 
 [*] -> A
-A -> B : [ guard1() ]
-A --> C : [ guard2() ]
+A -> B : [ guard1() ] / action1()
+A --> C : [ guard2() ] / action2()
 A --> D : event
 
-'[code] virtual bool guard1() { return true; }
-'[code] virtual bool guard2() { return true; }
+A : entry / actionA()
+B : entry / actionB()
+C : entry / actionC()
+D : entry / actionD()
+
+'[code] private:
+'[code] bool guard1() { return true; }
+'[code] bool guard2() { return true; }
+'[code] void action1() { LOGD("[ACTION %s]\n", __func__); }
+'[code] void action2() { LOGD("[ACTION %s]\n", __func__); }
+'[code] void actionA() { LOGD("[ACTION %s]\n", __func__); }
+'[code] void actionB() { LOGD("[ACTION %s]\n", __func__); }
+'[code] void actionC() { LOGD("[ACTION %s]\n", __func__); }
+'[code] void actionD() { LOGD("[ACTION %s]\n", __func__); }
 
 @enduml
