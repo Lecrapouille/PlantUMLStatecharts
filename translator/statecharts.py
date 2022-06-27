@@ -1079,7 +1079,7 @@ class Parser(object):
     ### Check infinite loops
     ###########################################################################
     def verify_infinite_loops(self):
-        cycles = list(nx.simple_cycles(self.graph))
+        cycles = self.graph_cycles()
         for cycle in cycles:
             find = True
             if len(cycle) == 1:
@@ -1090,7 +1090,7 @@ class Parser(object):
                     find = False
                     break
             if find == True:
-                str = ' '.join(cycle) + ' ' + cycle[0]
+                str = ' '.join(cycle) + ' '
                 self.warning('The state machine has an infinite loop: ' + str + '. Add an event!')
                 return
 
