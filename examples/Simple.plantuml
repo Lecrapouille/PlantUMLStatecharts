@@ -7,22 +7,23 @@ skin rose
 
 '[header] // Add here all your includes
 '[header] #include <iostream>
+'[header] #define NAME "[PLANTUML CODE]"
 '[header] // and your multi-lines C++ header code.
 
 '[init] // Add here your code for the contructor and reset()
-'[init] std::cout << __func__ << std::endl;
+'[init] std::cout << NAME << "[" << __func__ << "] Example of init code" << std::endl;
 
 '[code] // Add here your code definining methods and member variables
 '[code] private:
-'[code]   void action1() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action3() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action4() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action5() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action6() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action7() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action8() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action9() { LOGD("[ACTION %s]\n", __func__); }
-'[code]   void action10() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void action1() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action3() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action4() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action5() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action6() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action7() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action8() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action9() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action10() { LOGD(NAME"[ACTION %s]\n", __func__); }
 '[code]
 '[code] private:
 '[code]   bool guard1 = true;
