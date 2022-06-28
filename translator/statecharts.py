@@ -188,6 +188,8 @@ class Parser(object):
         # File descriptor of the opened file (plantUML, generated files).
         self.fd = None
         # Name of the plantUML file (input of the tool).
+        self.umlfile = ''
+        # Stem of the plantUML file.
         self.name = ''
         # The name of the generated C++ state machine class.
         self.class_name = ''
@@ -376,8 +378,9 @@ class Parser(object):
     ###########################################################################
     def generate_common_header(self):
         self.fd.write('// This file as been generated the ')
-        self.fd.write(date.today().strftime("%B %d, %Y\n"))
-        self.fd.write('// This code generation is still experimental. Some '
+        self.fd.write(date.today().strftime("%B %d, %Y"))
+        self.fd.write(' from the PlantUML statechart ' + self.umlfile)
+        self.fd.write('\n// This code generation is still experimental. Some '
                       'border cases may not be correctly managed!\n\n')
 
     ###########################################################################
@@ -1378,6 +1381,7 @@ class Parser(object):
     ###########################################################################
     def parse_plantuml_file(self, umlfile, cpp_or_hpp, classname):
         self.reset()
+        self.umlfile = umlfile
         self.name = Path(umlfile).stem
         self.class_name = self.name + classname
         self.enum_name = self.class_name + 'States'
