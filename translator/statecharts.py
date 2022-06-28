@@ -570,7 +570,7 @@ class Parser(object):
         self.indent(1), self.fd.write('{\n')
         self.indent(2), self.fd.write('StateMachine::start();\n')
         self.fd.write(self.extra_code.init)
-        self.indent(2), self.fd.write('onInternal_CONSTRUCTOR();\n')
+        self.fd.write(self.graph.nodes['[*]']['data'].internal)
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -656,6 +656,9 @@ class Parser(object):
                 self.indent(1), self.fd.write('}\n\n')
 
             if state.internal != '':
+                # Initial node is already generated in the ::start() method (this save generating one method)
+                if node == '[*]':
+                     continue
                 self.generate_method_comment('Do the internal transition when leaving the state ' + state.name + '.')
                 self.indent(1), self.fd.write('void ' + self.state_internal_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
