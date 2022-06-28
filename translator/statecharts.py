@@ -582,8 +582,8 @@ class Parser(object):
             self.generate_method_comment('External event.')
             self.indent(1), self.fd.write(event.header() + '\n')
             self.indent(1), self.fd.write('{\n')
-            self.indent(2), self.fd.write('LOGD("[EVENT %s]\\n", __func__);\n\n')
-            self.indent(2), self.fd.write('static Transitions s_transitions =\n')
+            self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][EVENT %s]\\n", __func__);\n\n')
+            self.indent(2), self.fd.write('static const Transitions s_transitions =\n')
             self.indent(2), self.fd.write('{\n')
             for origin, destination in arcs:
                 tr = self.graph[origin][destination]['data']
@@ -617,7 +617,7 @@ class Parser(object):
                 self.indent(1), self.fd.write('MOCKABLE bool ' + self.guard_function(origin, destination) + '()\n')
                 self.indent(1), self.fd.write('{\n')
                 self.indent(2), self.fd.write('const bool guard = (' + tr.guard + ');\n')
-                self.indent(2), self.fd.write('LOGD("[GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
                 self.indent(3), self.fd.write('(guard ? "true" : "false"));\n')
                 self.indent(2), self.fd.write('return guard;\n')
                 self.indent(1), self.fd.write('}\n\n')
@@ -626,7 +626,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.transition_function(origin, destination) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[TRANSITION ' + origin + ' --> ' + destination)
+                self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][TRANSITION ' + origin + ' --> ' + destination)
                 if tr.action[0:2] != '//':
                     self.fd.write(': ' + tr.action + ']\\n");\n')
                 else: # Cannot display action since contains comment + warnings
@@ -645,7 +645,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.state_entering_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[ENTERING STATE ' + state.name + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.entering)
                 self.indent(1), self.fd.write('}\n\n')
 
@@ -653,7 +653,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.state_leaving_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[LEAVING STATE ' + state.name + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.leaving)
                 self.indent(1), self.fd.write('}\n\n')
 
@@ -661,7 +661,7 @@ class Parser(object):
                 self.generate_method_comment('Do the internal transition when leaving the state ' + state.name + '.')
                 self.indent(1), self.fd.write('void ' + self.state_internal_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[GUARDING STATE ' + state.name + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.class_name.upper() + '][INTERNAL TRANSITION FROM STATE ' + node + ']\\n");\n')
                 self.fd.write(state.internal)
                 self.indent(1), self.fd.write('}\n\n')
 
@@ -864,7 +864,7 @@ class Parser(object):
             self.generate_mocked_guards()
             self.fd.write('\n'), self.indent(1), self.fd.write('fsm.start();\n')
             guard = self.graph[self.initial_state][cycle[0]]['data'].guard
-            self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+            self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
             self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[0]) + ');\n')
             self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[0] + '");\n')
 
@@ -875,12 +875,12 @@ class Parser(object):
 #                if self.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
 #                    tr = self.graph[cycle[i]][cycle[i]]['data']
 #                    if tr.event.name != '':
-#                        self.indent(1), self.fd.write('LOGD("// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+#                        self.indent(1), self.fd.write('LOGD("[' + self.class_name.upper() + ']// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
 #                        self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
 #                        if tr.guard != '':
 #                            self.fd.write(' // If ' + tr.guard)
 #                        self.fd.write('\n')
-#                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+#                        self.indent(1), self.fd.write('LOGD("[' + self.class_name.upper() + '] Current state: %s\\n", fsm.c_str());\n')
 #                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i]) + ');\n')
 #                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
 
@@ -888,7 +888,7 @@ class Parser(object):
                 tr = self.graph[cycle[i]][cycle[i+1]]['data']
                 if tr.event.name != '':
                     self.fd.write('\n'), self.indent(1)
-                    self.fd.write('LOGD("\\nEvent ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.fd.write('LOGD("\\n[' + self.class_name.upper() + '] Triggering event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
                     self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';\n')
 
                 if (i == len(cycle) - 2):
@@ -898,14 +898,14 @@ class Parser(object):
                         self.indent(1), self.fd.write('#warning "Malformed state machine: unreachable destination state"\n\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
-                        self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                        self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                         self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                         self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
                 elif self.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
             self.fd.write('}\n\n')
@@ -940,14 +940,14 @@ class Parser(object):
                 if event.name != '':
                     guard = self.graph[path[i]][path[i+1]]['data'].guard
                     self.fd.write('\n'), self.indent(1)
-                    self.fd.write('LOGD("\\nEvent ' + event.name + ' [' + guard + ']: ' + path[i] + ' ==> ' + path[i + 1] + '\\n");\n')
+                    self.fd.write('LOGD("[' + self.class_name.upper() + ']\\nEvent ' + event.name + ' [' + guard + ']: ' + path[i] + ' ==> ' + path[i + 1] + '\\n");\n')
                     self.fd.write('\n'), self.indent(1), self.fd.write('fsm.' + event.caller() + ';\n')
                 if (i == len(path) - 2):
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
                 elif self.graph[path[i+1]][path[i+2]]['data'].event.name != '':
-                    self.indent(1), self.fd.write('LOGD("Current state: %s\\n", fsm.c_str());\n')
+                    self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
             self.fd.write('}\n\n')
@@ -1046,8 +1046,8 @@ class Parser(object):
 
                 if tr.event.name == '': # and state != self.initial_state:
                     code += '        {\n'
-                    code += '            LOGD("[STATE ' + s +  '] Internal transition to state ' + d + '\\n");\n'
                     code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
+                    code += '            LOGD("[' + self.class_name.upper() + '][STATE ' + state +  '] Candidate for internal transitioning to state ' + dest + '\\n");\n'
                     code += '            {\n'
                     code += '                .destination = ' + self.state_enum(dest) + ',\n'
                     if tr.action != '':

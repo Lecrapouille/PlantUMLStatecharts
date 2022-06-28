@@ -197,6 +197,7 @@ public:
     //--------------------------------------------------------------------------
     inline void start()
     {
+        LOGD("[STATE MACHINE] Restart the state machine\n");
         m_current_state = m_initial_state;
         std::queue<Transition const*> empty;
         std::swap(m_nesting, empty);
@@ -232,8 +233,8 @@ public:
         }
         else
         {
-            LOGD("[FSM INTERNALS] Ignoring external event\n");
-            //LOGE("[FSM INTERNALS] Unknow transition. Aborting!\n");
+            LOGD("[STATE MACHINE] Ignoring external event\n");
+            //LOGE("[STATE MACHINE] Unknow transition. Aborting!\n");
             //exit(EXIT_FAILURE);
         }
     }
@@ -280,12 +281,12 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
     // continue thank to the while loop. This avoids recursion.
     if (m_nesting.size())
     {
-        LOGD("[FSM INTERNALS] Internal event. Memorize state %s\n",
+        LOGD("[STATE MACHINE] Internal event. Memorize state %s\n",
              stringify(tr->destination));
         m_nesting.push(tr);
         if (m_nesting.size() >= 16u)
         {
-            LOGE("[FSM INTERNALS] Infinite loop detected. Abort!\n");
+            LOGE("[STATE MACHINE] Infinite loop detected. Abort!\n");
             exit(EXIT_FAILURE);
         }
         return ;
@@ -298,27 +299,27 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         // Consum the current state
         transition = m_nesting.front();
 
-        LOGD("[FSM INTERNALS] React to event from state %s\n",
+        LOGD("[STATE MACHINE] React to event from state %s\n",
              stringify(m_current_state));
 
         // Forbidden event: kill the system
         if (transition->destination == STATES_ID::CANNOT_HAPPEN)
         {
-            LOGE("[FSM INTERNALS] Forbidden event. Aborting!\n");
+            LOGE("[STATE MACHINE] Forbidden event. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
         // Do not react to this event
         else if (transition->destination == STATES_ID::IGNORING_EVENT)
         {
-            LOGD("[FSM INTERNALS] Ignoring external event\n");
+            LOGD("[STATE MACHINE] Ignoring external event\n");
             return ;
         }
 
         // Unknown state: kill the system
         else if (transition->destination >= STATES_ID::MAX_STATES)
         {
-            LOGE("[FSM INTERNALS] Unknown state. Aborting!\n");
+            LOGE("[STATE MACHINE] Unknown state. Aborting!\n");
             exit(EXIT_FAILURE);
         }
 
@@ -330,21 +331,21 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         bool guard_res = (transition->guard == nullptr);
         if (!guard_res)
         {
-            LOGD("[FSM INTERNALS] Call the guard %s -> %s\n",
+            LOGD("[STATE MACHINE] Call the guard %s -> %s\n",
                  stringify(m_current_state), stringify(transition->destination));
             guard_res = (static_cast<FSM*>(this)->*transition->guard)();
         }
 
         if (!guard_res)
         {
-            LOGD("[FSM INTERNALS] Transition refused by the %s guard. Stay"
+            LOGD("[STATE MACHINE] Transition refused by the %s guard. Stay"
                  " in state %s\n", stringify(transition->destination),
                  stringify(m_current_state));
         }
         else
         {
             // The guard allowed the transition to the next state
-            LOGD("[FSM INTERNALS] Transitioning to new state %s\n",
+            LOGD("[STATE MACHINE] Transitioning to new state %s\n",
                  stringify(transition->destination));
 
             // Transition
@@ -352,7 +353,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
             m_current_state = transition->destination;
             if (transition->action != nullptr)
             {
-                LOGD("[FSM INTERNALS] Call the transition %s -> %s action\n",
+                LOGD("[STATE MACHINE] Call the transition %s -> %s action\n",
                      stringify(previous_state), stringify(transition->destination));
                 (static_cast<FSM*>(this)->*transition->action)();
             }
@@ -363,7 +364,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                 // Do reactions when leaving the current state
                 if (cst.leaving != nullptr)
                 {
-                    LOGD("[FSM INTERNALS] Call the state %s 'on leaving' action\n",
+                    LOGD("[STATE MACHINE] Call the state %s 'on leaving' action\n",
                          stringify(previous_state));
                     (static_cast<FSM*>(this)->*cst.leaving)();
                 }
@@ -371,7 +372,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                 // Do reactions when entring into the new state
                 if (nst.entering != nullptr)
                 {
-                    LOGD("[FSM INTERNALS] Call the state %s 'on entry' action\n",
+                    LOGD("[STATE MACHINE] Call the state %s 'on entry' action\n",
                          stringify(transition->destination));
                     (static_cast<FSM*>(this)->*nst.entering)();
                 }
@@ -379,15 +380,15 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                 // Do internal transitions when no event are present
                 if (nst.internal != nullptr)
                 {
-                    LOGD("[FSM INTERNALS] Call the state %s 'on internal' action\n",
+                    LOGD("[STATE MACHINE] Call the state %s 'on internal' action\n",
                          stringify(transition->destination));
                     (static_cast<FSM*>(this)->*nst.internal)();
                 }
             }
             else
             {
-                LOGD("[FSM INTERNALS] Was previously in this mode: no "
-                     "actions to perform\n");
+                LOGD("[STATE MACHINE] Stay in the same state %s\n",
+                     stringify(transition->destination));
             }
         }
 
