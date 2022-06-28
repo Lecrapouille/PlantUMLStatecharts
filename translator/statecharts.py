@@ -592,15 +592,11 @@ class Parser(object):
                 self.indent(3), self.fd.write('{\n')
                 self.indent(4), self.fd.write(self.state_enum(origin) + ',\n')
                 self.indent(4), self.fd.write('{\n')
-                self.indent(5), self.fd.write(self.state_enum(destination) + ',\n')
+                self.indent(5), self.fd.write('.destination = ' + self.state_enum(destination) + ',\n')
                 if tr.guard != '':
-                    self.indent(5), self.fd.write('&' + self.guard_function(origin, destination, True) + ',\n')
-                else:
-                    self.indent(5), self.fd.write('nullptr,\n')
+                    self.indent(5), self.fd.write('.guard = &' + self.guard_function(origin, destination, True) + ',\n')
                 if tr.action != '':
-                    self.indent(5), self.fd.write('&' + self.transition_function(origin, destination, True) + ',\n')
-                else:
-                    self.indent(5), self.fd.write('nullptr,\n')
+                    self.indent(5), self.fd.write('.action = &' + self.transition_function(origin, destination, True) + ',\n')
                 self.indent(4), self.fd.write('},\n')
                 self.indent(3), self.fd.write('},\n')
             self.indent(2), self.fd.write('};\n\n')
