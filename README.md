@@ -1,18 +1,27 @@
 # PlantUML Statecharts (State Machine) Translator
 
-This [repository](https://github.com/Lecrapouille/StateMachine) offers a Python
-v3 script for generating finite state machines (FSM) in C++11 from [PlantUML
-statecharts](https://plantuml.com/fr/state-diagram):
-- The generated code is a compromise between simplicity to read, no virtual
-  methods, memory foot print.
-- The tool does some basic verification to check if your state machine is well
+This [repository](https://github.com/Lecrapouille/Statecharts) contains:
+- A single C++11 header file containing the base code for defining a state
+  machine. You can use it to define manually your own state machines. The code
+  is [here](include/StateMachine.hpp).
+- A Python v3 script reading [PlantUML
+  statecharts](https://plantuml.com/fr/state-diagram) and generating Statecharts
+  (aka finite state machines or FSM) in C++11 code as child class of the base
+  state machine defined in the header file. The code is
+  [here](translator/statecharts.py).
+- Several [examples](examples) of PlantUML statecharts are given.
+
+The script offers you:
+- To generate code in a compromise between simplicity to read, no virtual
+  methods, memory foot print and no usage of external lib (such boost).
+- To do some basic verification to check if your state machine is well
   formed.
-- The tool also generates C++ unit tests (in [Google
+- To generate C++ unit tests (in [Google
   tests](https://github.com/google/googletest)) to verify if your state machine
   is functional.
-- The goal of this tool is to separated things: one part manages the logic of
-  how a state machine shall work, the second part is to write code in a
-  descriptive way.
+- The goal of this tool is to separated things: one part to manage the logic of
+  how a state machine shall work (the base class), the second part to write code
+  in a descriptive way (the child class).
 
 Here an example of state machine with all the syntax the tool is able to parse:
 
@@ -20,8 +29,8 @@ Here an example of state machine with all the syntax the tool is able to parse:
 
 This repository also contains several more evolved
 [examples](examples/README.md) of statecharts the tool can parse. For people not
-sure on how state machines work, there are several links on courses in the last
-section of this document.
+sure on how state machines work, there are several links explaining them given
+the last section of this document.
 
 ## Limitation: what the tools cannot offer to you
 
@@ -46,7 +55,7 @@ section of this document.
 - Does not give 100% of compilable C++ code source. It depends on the code of
   your guards and actions. It should be simple valid C++ code. The main code of
   the generated state machine is functional you do not have to modify it but you
-  may have to clean a little the code for your gards, actions, add member
+  may have to clean a little the code for your guards, actions, add member
   variables to complete the compilation.
 - In gestation: add optional data to events. In this
   [project](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2)
@@ -207,7 +216,7 @@ immediately made in an atomic way. In our example if `event1`, `event2` and
 `guard1` were not present this would create an infinite loop.
 
 Events shall be mutually exclusive, since we are dealing in discrete time event,
-several events can occured during the delta time.
+several events can occurred during the delta time.
 
 ## Details Design
 
@@ -297,3 +306,6 @@ Our implementation is the following:
   machine) describing how the control flow (second diagram) controls the data
   flow (first diagram).
 - [Sructured Analysis for Real Time](https://www.espacetechnologue.com/wp-content/uploads/2017/03/2_DeveloppementApp_STRv11.pdf)
+- [UML Behavioral Diagrams: State Transition Diagram](https://youtu.be/OsmWASXE2IM) and
+  [State Transition Diagram](https://youtu.be/PF9QcYWIsVE) YouTube videos made by the
+  Georgia Tech Software Development Process.
