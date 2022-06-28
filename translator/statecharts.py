@@ -396,8 +396,7 @@ class Parser(object):
         else:
             self.fd.write('#include "StateMachine.hpp"\n')
         self.fd.write(self.extra_code.header)
-        if self.extra_code.header != '':
-            self.fd.write('\n')
+        self.fd.write('\n')
 
     ###########################################################################
     ### Code generator: add the footer file.
