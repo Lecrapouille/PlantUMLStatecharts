@@ -776,19 +776,28 @@ class Parser(object):
                 if tr.count_guard == 0:
                     self.fd.write('.WillRepeatedly(Return(false));\n')
                 else:
-                    self.fd.write('.WillRepeatedly(Return(true));\n')
+                    self.fd.write('.WillRepeatedly(Invoke([](){ LOGD("' + tr.guard.replace('\n', ' ').lstrip() + '\\n"); return true; }));\n')
             if tr.action != '':
                 self.fd.write('    EXPECT_CALL(fsm, ' + self.transition_function(origin, destination, False) + '())')
-                self.fd.write('.Times(' + str(tr.count_action) + ');\n')
+                self.fd.write('.Times(' + str(tr.count_action) + ')')
+                if tr.count_action >= 1:
+                    self.fd.write('.WillRepeatedly(Invoke([](){ LOGD("' + tr.action.replace('\n', ' ').lstrip() + '\\n"); }))')
+                self.fd.write(';\n')
         nodes = list(self.graph.nodes)
         for node in nodes:
             state = self.graph.nodes[node]['data']
             if state.entering != '':
                 self.fd.write('    EXPECT_CALL(fsm, ' + self.state_entering_function(node, False) + '())')
-                self.fd.write('.Times(' + str(state.count_entering) + ');\n')
+                self.fd.write('.Times(' + str(state.count_entering) + ')')
+                if state.count_entering >= 1:
+                    self.fd.write('.WillRepeatedly(Invoke([](){ LOGD("' + state.entering.replace('\n', ' ').lstrip() + '\\n"); }))')
+                self.fd.write(';\n')
             if state.leaving != '':
                 self.fd.write('    EXPECT_CALL(fsm, ' + self.state_leaving_function(node, False) + '())')
-                self.fd.write('.Times(' + str(state.count_leaving) + ');\n')
+                self.fd.write('.Times(' + str(state.count_leaving) + ')')
+                if state.count_leaving >= 1:
+                    self.fd.write('.WillRepeatedly(Invoke([](){ LOGD("' + state.leaving.replace('\n', ' ').lstrip() + '\\n"); }))')
+                self.fd.write(';\n')
 
     ###########################################################################
     ### Generate mock guards.
