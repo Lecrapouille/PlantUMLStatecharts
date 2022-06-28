@@ -1030,17 +1030,14 @@ class Parser(object):
             code = ''
             for dest in list(self.graph.neighbors(state)):
                 tr = self.graph[state][dest]['data']
-                s = self.state_name(state)
-                d = self.state_name(dest)
-
                 if tr.guard != '':
                     code += '        if (' + self.guard_function(state, dest) + '())\n'
                 elif tr.event.name == '': # Dummy event and dummy guard
                     if count == 1:
-                        code += '\n#warning "Missformed state machine: missing guard from state ' + s + ' to state ' + d + '"\n'
+                        code += '\n#warning "Missformed state machine: missing guard from state ' + state + ' to state ' + dest + '"\n'
                         code += '        /* MISSING GUARD: if (guard) */\n'
                     elif count > 1:
-                        code += '\n#warning "Undeterminist State machine detected switching from state ' + s + ' to state ' + d + '"\n'
+                        code += '\n#warning "Undeterminist State machine detected switching from state ' + state + ' to state ' + dest + '"\n'
 
                 if tr.event.name == '': # and state != self.initial_state:
                     code += '        {\n'
