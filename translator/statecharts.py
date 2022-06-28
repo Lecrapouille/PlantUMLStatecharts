@@ -762,10 +762,10 @@ class Parser(object):
             if tr.action != '':
                 tr.count_action += 1
             source = self.graph.nodes[cycle[i]]['data']
-            if source.leaving != '':
-                source.count_leaving += 1
             destination = self.graph.nodes[cycle[i+1]]['data']
-            if destination.entering != '':
+            if source.leaving != '' and source.name != destination.name:
+                source.count_leaving += 1
+            if destination.entering != '' and source.name != destination.name:
                 destination.count_entering += 1
 
     ###########################################################################
