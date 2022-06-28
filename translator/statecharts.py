@@ -1044,8 +1044,8 @@ class Parser(object):
 
                 if tr.event.name == '': # and state != self.initial_state:
                     code += '        {\n'
-                    code += '            static StateMachine<' + self.class_name + ', ' + self.enum_name + '>::Transition tr =\n'
                     code += '            LOGD("[' + self.class_name.upper() + '][STATE ' + state +  '] Candidate for internal transitioning to state ' + dest + '\\n");\n'
+                    code += '            static const Transition tr =\n'
                     code += '            {\n'
                     code += '                .destination = ' + self.state_enum(dest) + ',\n'
                     if tr.action != '':
