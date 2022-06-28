@@ -98,7 +98,7 @@ all: $(TARGETS)
 	$(Q)plantuml $<
 	$(Q)mv $@ $(BUILD)
 
-%$(PREFIX)Tests.cpp: %.plantuml %.png $(PLANTUML_PARSER) $(BUILD)/statecharts.ebnf Makefile
+%$(PREFIX)Tests.cpp: %.plantuml %.png $(PLANTUML_PARSER) $(BUILD)/statecharts.ebnf ../include/StateMachine.hpp Makefile
 	@echo "\033[0;32mParsing $<\033[0m"
 	$(Q)(cd $(BUILD) && ../$(PLANTUML_PARSER) ../$< $(PLANTUML_COMMAND_LINE))
 
