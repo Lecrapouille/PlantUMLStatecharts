@@ -3,6 +3,8 @@ skin rose
 
 '[header] #define REFSPEED int
 '[code] REFSPEED m_ref_speed = 0;
+'[test] #define REFSPEED int
+'[test] REFSPEED refSpeed = 0;
 
 [*] --> Idle
 
