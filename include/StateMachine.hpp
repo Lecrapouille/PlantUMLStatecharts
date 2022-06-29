@@ -201,6 +201,15 @@ public:
         m_current_state = m_initial_state;
         std::queue<Transition const*> empty;
         std::swap(m_nesting, empty);
+        m_enabled = true;
+    }
+
+    //--------------------------------------------------------------------------
+    //! \brief Return the current state.
+    //--------------------------------------------------------------------------
+    inline void stop()
+    {
+        m_enabled = false;
     }
 
     //--------------------------------------------------------------------------
@@ -216,7 +225,7 @@ public:
     //--------------------------------------------------------------------------
     inline const char* c_str() const
     {
-        return stringify(m_current_state);
+        return m_enabled ? stringify(m_current_state) : "--";
     }
 
     //--------------------------------------------------------------------------
@@ -226,6 +235,9 @@ public:
     //--------------------------------------------------------------------------
     inline void transition(Transitions const& transitions)
     {
+        if (!m_enabled)
+            return ;
+
         auto const& it = transitions.find(m_current_state);
         if (it != transitions.end())
         {
@@ -263,6 +275,9 @@ private:
     //! \brief Temporary variable saving the nesting state (needed for internal
     //! event).
     std::queue<Transition const*> m_nesting;
+    //! \brief Enable / disable state machine (TBD: usable for nesting state
+    //! machine (that is not generated as flat state machine)).
+    bool m_enabled = false;
 };
 
 //------------------------------------------------------------------------------
