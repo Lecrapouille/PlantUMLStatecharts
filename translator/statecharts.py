@@ -418,7 +418,7 @@ class Parser(object):
     ###########################################################################
     def generate_state_enums(self):
         self.generate_function_comment('States of the state machine.')
-        self.fd.write('enum ' + self.enum_name + '\n{\n')
+        self.fd.write('enum class ' + self.enum_name + '\n{\n')
         self.indent(1), self.fd.write('// Client states:\n')
         for state in list(self.graph.nodes):
             self.indent(1), self.fd.write(self.state_name(state) + ',')
@@ -440,9 +440,9 @@ class Parser(object):
         self.indent(1), self.fd.write('static const char* s_states[] =\n')
         self.indent(1), self.fd.write('{\n')
         for state in list(self.graph.nodes):
-            self.indent(2), self.fd.write('[' + self.state_enum(state) + '] = "' + state + '",\n')
+            self.indent(2), self.fd.write('[int(' + self.state_enum(state) + ')] = "' + state + '",\n')
         self.indent(1), self.fd.write('};\n\n')
-        self.indent(1), self.fd.write('return s_states[state];\n};\n\n')
+        self.indent(1), self.fd.write('return s_states[int(state)];\n};\n\n')
 
     ###########################################################################
     ### Convert the state name (PlantUML name to C++ name)
@@ -533,7 +533,7 @@ class Parser(object):
             # Sparse notation: nullptr are implicit so skip generating them
             if s.entering == '' and s.leaving == '' and s.internal == '':
                 continue
-            self.indent(2), self.fd.write('m_states[' + self.state_enum(s.name) + '] =\n')
+            self.indent(2), self.fd.write('m_states[int(' + self.state_enum(s.name) + ')] =\n')
             self.indent(2), self.fd.write('{\n')
             if s.leaving != '':
                 self.indent(3), self.fd.write('.leaving = &')

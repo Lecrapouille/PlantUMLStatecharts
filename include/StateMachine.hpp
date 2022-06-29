@@ -175,7 +175,7 @@ public:
 
     //! \brief Define the type of container holding all stated of the state
     //! machine.
-    using States = std::array<State, STATES_ID::MAX_STATES>;
+    using States = std::array<State, int(STATES_ID::MAX_STATES)>;
     //! \brief Define the type of container holding states transitions. Since
     //! a state machine is generally a sparse matrix we use red-back tree.
     using Transitions = std::map<STATES_ID, Transition>;
@@ -324,8 +324,8 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         }
 
         // Reaction: call the member function associated to the current state
-        StateMachine<FSM, STATES_ID>::State const& cst = m_states[m_current_state];
-        StateMachine<FSM, STATES_ID>::State const& nst = m_states[transition->destination];
+        StateMachine<FSM, STATES_ID>::State const& cst = m_states[int(m_current_state)];
+        StateMachine<FSM, STATES_ID>::State const& nst = m_states[int(transition->destination)];
 
         // Call the guard
         bool guard_res = (transition->guard == nullptr);
