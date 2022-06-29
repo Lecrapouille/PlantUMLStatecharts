@@ -1,0 +1,17 @@
+@startuml
+
+[*] -> EnableSystem
+
+state EnableSystem {
+  [*] -> State1
+  State1 -> [*]
+
+--
+
+  [*] -> State2
+  State2 -> [*]
+}
+
+EnableSystem -> DisableSystem
+
+@enduml

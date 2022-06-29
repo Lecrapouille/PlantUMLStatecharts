@@ -1,0 +1,29 @@
+@startuml
+
+[*] --> PompeEnArret
+Default : entry / arret pompe
+Default : do / alarme type3
+
+state PompeEnMarche {
+  state AttenteLiberationHM {
+    MiseEnMarchePompe --> Attente40Secondes
+    MiseEnMarchePompe : entry / marche pompe
+    Attente40Secondes --> Attente20Secondes : after(40s)
+    Attente20Secondes --> Default : after(20s)
+    Attente20Secondes : do / alarme type1
+  }
+
+  AttenteLiberationHM -> AttenteHM : !HM
+  AttenteHM : do / alarme type2
+  Attente40Secondes <- AttenteHM : HM
+  AttenteHM --> Default : after(5s)
+}
+
+PompeEnArret --> MiseEnMarchePompe : BPM [HM && (!AU) && (!DHM) && (!DDP)]
+RemiseEnService -> PompeEnArret
+RemiseEnService <- Default : Acq
+PompeEnArret <-- PompeEnMarche : AU
+PompeEnArret <-- PompeEnMarche : BPA
+PompeEnArret <-- PompeEnMarche : DPP
+
+@enduml
