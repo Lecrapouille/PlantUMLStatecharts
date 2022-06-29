@@ -1205,6 +1205,15 @@ class Parser(object):
                 event.params = splits[1][:-1].split(',')
 
     ###########################################################################
+    ### Check if the method name is not conflicting with a class method.
+    ###########################################################################
+    def check_valid_method_name(self, name):
+        s = name.split('(')[0]
+        print("check_valid_method_name", name, s)
+        if s in ['start', 'stop', 'state', 'c_str', 'transition' ]:
+            self.warning('The C++ method name ' + name + ' is already used by the base class StateMachine')
+
+    ###########################################################################
     ### Parse the following plantUML code and store information of the analyse:
     ###    origin state -> destination state : event [ guard ] / action
     ###    destination state <- origin state : event [ guard ] / action
@@ -1236,16 +1245,20 @@ class Parser(object):
             if self.tokens[i] == '#event':
                 N = int(self.tokens[i+1])
                 self.parse_event(tr.event, self.tokens[i+2:i+2+N])
+                self.check_valid_method_name(tr.event.name)
                 # Events are optional. If not given, we use them as anonymous internal event.
                 # Store them in a dictionary: "event => (origin, destination) states" to create
                 # the state transition for each event.
                 self.lookup_events[tr.event].append((tr.origin, tr.destination))
             elif self.tokens[i] == '#guard':
                 tr.guard = self.tokens[i + 1][1:-1].strip() # Remove [ and ]
+                self.check_valid_method_name(tr.guard)
             elif self.tokens[i] == '#uml_action':
                 tr.action = self.tokens[i + 1][1:].strip() # Remove /
+                self.check_valid_method_name(tr.action)
             elif self.tokens[i] == '#std_action':
                 tr.action = self.tokens[i + 1][6:].strip() # Remove \n--\n
+                self.check_valid_method_name(tr.action)
 
             # Distinguish a transition cycling to its own state from the "on event" on the state
             if as_state and (tr.origin == tr.destination):
