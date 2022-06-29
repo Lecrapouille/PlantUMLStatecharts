@@ -1,13 +1,15 @@
 # Examples of statecharts the tool can parse
 
-## Simple
+## Non hierarchic State Machines (FSM)
 
-![alt motor](../doc/Simple.png)
+### Simple FSM
+
+![alt fsm](../doc/SimpleFSM.png)
 
 This example does not model a real system but shows all possible syntax the
 tool can parse. Consider it as a cheat-sheet.
 
-## Motor
+### Motor Controller
 
 ![alt motor](../doc/Motor.png)
 
@@ -25,7 +27,7 @@ Stop <- Spinning : setSpeed(x) [ x == 0 ]
 Stop <- Spinning : halt
 ```
 
-## Gumball Machine
+### Gumball Distributor
 
 ![alt gumball](../doc/Gumball.png)
 
@@ -44,7 +46,7 @@ to get a gumball has to add a coin in the distributor and turn the crank. The
 number of gumballs is decreased. When no gumballs are available the client coin
 is returned.
 
-## Rich Man
+### Becoming a rich man
 
 ![alt richman](../doc/RichMan.png)
 
@@ -52,7 +54,7 @@ A punk guy with no money in pockets, find coins in the street but his pockets is
 limited to 10 quarters.  This example introduces multiple output transitions
 with guards.
 
-## Lane Keeping System
+### Lane Keeping System
 
 ![alt lks](../doc/LaneKeeping.png)
 
@@ -66,7 +68,7 @@ enable it (event `btn_LKS` pressed).  When the system detects a lane (event
 As action the system switch on/off LEDs and switch on/off the servoing motor
 (for the steering direction).
 
-## Self Parking Assistant
+### Self Parking Assistant
 
 ![alt parking](../doc/SelfParking.png)
 
@@ -82,22 +84,38 @@ leaving) the parking spot. It does the maneuver if a trajectory is found.
 The vehicle halts when detects an obstacle or has driven too far (no empty
 parking spot) or when the maneuver is not possible or finished.
 
-## Ethernet Box
+### Ethernet Box
 
-![alt wifi](../doc/EthernetBox.png)
+![alt box](../doc/EthernetBox.png)
 
 Simulate the manager of an Ethernet box pairing a phone by wifi.
 
-## Malformed state machines
-
-![alt error](../doc/InfiniteLoop.png)
-
-![alt error](../doc/BadSwitch2.png)
+### Malformed state machines
 
 The following examples: InfiniteLoop, BadSwitch are examples to test if the tool
 detects some basic errors.
 
-In this example, since there is no explicit events, the system will never stop
+![alt ooloop](../doc/InfiniteLoop.png)
+
+![alt bad](../doc/BadSwitch2.png)
+
+In these examples, since there is no explicit events, the system will never stop
 commuting from `State1` to `State2` to `State1` in an atomic way (meaning within
 a single system step). This case shall of course not happening else all your
-system will be frozen.
+system will be frozen and the tool is detecting them.
+
+## Hierarchic State Machines (HSM)
+
+**WARNING: All these examples are not yet parsed by the tool. In gestation**
+
+## Simple Composite
+
+![alt composite](../doc/SimpleComposite.png)
+
+## Simple Orthogonal
+
+![alt ortho](../doc/SimpleOrthogonal.png)
+
+## Dead Man Detector for pump
+
+![alt pompe](../doc/Pompe.png)
