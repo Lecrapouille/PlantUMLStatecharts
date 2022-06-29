@@ -70,7 +70,21 @@ LDFLAGS = `pkg-config --libs gtest gmock`
 # POSTCOMPILE = $(Q)mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
 
 # Files to compile
-TARGETS = Simple LaneKeeping Gumball InfiniteLoop BadSwitch1 BadSwitch2 RichMan EthernetBox Motor
+TARGETS = SimpleFSM
+# SimpleFSM LaneKeeping Gumball InfiniteLoop BadSwitch1 BadSwitch2 FixBadSwitch2 RichMan EthernetBox Motor SelfParking
+
+# RichMan: unit test OK
+# Gumball: unit test OK: (manque les bonnes valeurs au constructor ?)
+# EthernetBox: unit test OK
+# LaneKeeping: unit test OK
+# FixBadSwitch2: unit test OK
+# BadSwitch1 ok MAIS DEVRAIT ETRE KO
+# Simple: unit test KO: internal events
+# Motor: KO data event TBD
+# Comment faire comprendre a gtest que ces tests ko c'est normal
+# EXPECT_NONFATAL_FAILURE(...
+# BadSwitch1
+# InfiniteLoop
 
 # Mandatory else Makefile drops temporary files.
 .PRECIOUS: $(BUILD)/%$(PREFIX)Tests.cpp $(BUILD)/%$(PREFIX)Tests.o
