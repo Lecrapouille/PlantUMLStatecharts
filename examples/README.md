@@ -104,6 +104,12 @@ commuting from `State1` to `State2` to `State1` in an atomic way (meaning within
 a single system step). This case shall of course not happening else all your
 system will be frozen and the tool is detecting them.
 
+### Triggers
+
+**WARNING: This case is not managed by this tool**
+
+![alt triggers](../doc/Triggers.png)
+
 ## Hierarchic State Machines (HSM)
 
 **WARNING: All these examples are not yet parsed by the tool. In gestation**
