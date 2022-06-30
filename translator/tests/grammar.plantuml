@@ -1,4 +1,11 @@
 @startuml
 State1 --> State2 : eee [ a[0] + b] / action = 1/3
 State2 <-- State3
+
+state State4 {
+  [*] -> ON
+  ON -> OFF : off
+  OFF -> ON : on
+}
+
 @enduml
