@@ -1378,7 +1378,7 @@ class Parser(object):
             for c in inst.children:
                 self.visit_ast(c)
         elif inst.data == 'cpp_code':
-            self.parse_extra_code(str(inst.children[0]), inst.children[1].lstrip())
+            self.parse_extra_code(str(inst.children[0]), inst.children[1].strip())
         elif inst.data == 'transition':
             # Note: we have to convert into a list of tokens since parse_state()
             # can call parse_transition() with a generated code and we do not

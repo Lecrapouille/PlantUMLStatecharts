@@ -1,8 +1,27 @@
 @startuml
-State1 --> State2 : eee [ a[0] + b] / action = 1/3
-State2 <-- State3
 
-state State4 {
+' ceci est un commentaire
+'[header] ceci est un header 1
+'[header] ceci est un header 2
+'[footer] ceci est un footer 1
+'[footer] ceci est un footer 2
+'[init] a = 0;
+'[init] b = "ff";
+'[code] int foo();
+'[code] virtual std::string foo(std::foo<Bar> const& arg[]) = 0;
+
+[*] --> State1
+State1 --> State2
+State2 -> State3 : / action = 1/3
+State3 <- State4 : [a[0] + b[] + c(3)]
+State4 <-- State5 : [a[0] + b[] + c(3)] / action = 1/3
+State5 --> State6 : setpoint(x, y)
+State6 --> State7 : foo bar()
+State8 <- State7 : foo bar / foo(a, 2[]) + "bar"; gg
+State9 <- State8 : foo bar [a[0] + b[] + c(3)]
+State10 --> State9 : foo bar [a[0] + b[] + c(3)] / foo(a, a[2] / 2) + "bar"; gg
+
+state State11 {
   [*] -> ON
   ON -> OFF : off
   OFF -> ON : on
