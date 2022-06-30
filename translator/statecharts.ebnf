@@ -4,7 +4,7 @@
 // https://stackoverflow.com/questions/65872693/how-can-i-split-a-rule-with-lark-ebnf
 
 start: "@startuml" "\n" state_diagram "@enduml" (WS|"\n"*)
-state_diagram: ( cpp_code | comment | skin | state_block | state_action | transition | "\n" )*
+state_diagram: ( cpp_code | comment | skin | state_block | state_action | transition | note | ortho_block | "\n" )*
 
 // Skin is a theme parameter, we do not care of it but since in newer version of PlantUML they
 // changed the default theme, we need to parse it and ignore it.
@@ -18,8 +18,13 @@ CPP_WHAT: "[header]" | "[footer]" | "[param]" | "[init]" | "[code]" | "[test]"
 // PlantUML single-line comment
 comment: "'" FREE_TEXT "\n"
 
-// Hierarchic State Machine: not managed yet!
+// Hierarchic State Machine
 state_block: "state" STATE "{" "\n" state_diagram "}" "\n"
+ortho_block : (comment | state_block | state_action | transition)* ("--" | "||") "\n" (comment | state_block | state_action | transition)*
+
+// Add a note
+note: "note" side "of" STATE "\n" /.+/ "\n" "end" "note" "\n"
+?side: "left" -> left | "right" -> right
 
 // UML statecharts entry/leaving actions. I added alternative names
 ?state_action: state_entry | state_exit | state_event | state_comment

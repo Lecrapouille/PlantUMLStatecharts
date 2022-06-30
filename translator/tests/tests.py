@@ -241,6 +241,32 @@ def check_AST(root):
     check(c2.children[3].children[0] == 'on')
     c += 1
 
+    # state Active {
+    #   [*] -> NumLockOff
+    #   NumLockOff --> NumLockOn : EvNumLockPressed
+    #   NumLockOn --> NumLockOff : EvNumLockPressed
+    #   --
+    #   [*] -> CapsLockOff
+    #   CapsLockOff --> CapsLockOn : EvCapsLockPressed
+    #   CapsLockOn --> CapsLockOff : EvCapsLockPressed
+    #   --
+    #   [*] -> ScrollLockOff
+    #   ScrollLockOff --> ScrollLockOn : EvCapsLockPressed
+    #   ScrollLockOn --> ScrollLockOff : EvCapsLockPressed
+    # }
+#    check(root.children[c].data == 'state_block')
+#    check(len(root.children[c].children) == 2)
+#    check(root.children[c].children[0] == 'Active')
+#    check(root.children[c].children[1].data == 'state_diagram')
+#    check(len(root.children[c].children[1].children) == 5)
+#    check(root.children[c].children[1].children[0].data == 'ortho_block')
+#    print(root.children[c].children[1].children[0].children)
+#    check(len(root.children[c].children[1].children[0].children) == 6)
+#    check(root.children[c].children[1].children[0].children[0].data == 'transition')
+#    c0 = root.children[c].children[1].children[0].children[0]
+#    check(c0.children[0] == '[*]')
+#    check(c0.children[1] == '->')
+#    check(c0.children[2] == 'NumLockOff')
 
 def main():
     f = open('../statecharts.ebnf')
