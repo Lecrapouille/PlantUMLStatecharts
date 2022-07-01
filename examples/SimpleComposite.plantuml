@@ -9,6 +9,7 @@ state EnableSystem {
   OFF -> ON : on
 }
 
-EnableSystem -> DisableSystem : halt
+EnableSystem -> DisableSystem : disable
+EnableSystem <- DisableSystem : enable
 
 @enduml

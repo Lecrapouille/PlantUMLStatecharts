@@ -83,6 +83,19 @@ class Event(object):
             params += p.lower()
         return self.name + '(' + params + ')'
 
+    ###########################################################################
+    ###
+    ###########################################################################
+    def brodcast(self):
+        i = 0
+        params = ''
+        for p in self.params:
+            if params != '':
+                params += ', ' + p
+                i += 1
+            params += p.lower()
+        return self.name + '(' + params + ');'
+
     def __hash__(self):
         return hash(self.name)
 
@@ -193,6 +206,8 @@ class StateMachine(object):
         # Parent FSM
         self.children = []
         self.parent = None
+        # From: external (if '' else state machine if not empty)
+        self.broadcasts = []
         # Dictionnary of "event => (source state, destination state)" needed for
         # computing tables of state transitions for each events.
         self.lookup_events = defaultdict(list)
@@ -596,18 +611,34 @@ class Parser(object):
     ### Generate the state machine start method (equivalent to a reset).
     ###########################################################################
     def generate_reset_method(self):
-        self.generate_method_comment('Reset the state machine.')
+        self.generate_method_comment('Reset the state machine and nested machines. Do the initial internal transition.')
         self.indent(1), self.fd.write('void start()\n')
         self.indent(1), self.fd.write('{\n')
+        # Init base class of the state machine
         self.indent(2), self.fd.write('StateMachine::start();\n')
-        self.fd.write(self.fsm.extra_code.init)
-        self.fd.write(self.fsm.graph.nodes['[*]']['data'].internal)
+        # Init nested state machines
+        for sm in self.fsm.children:
+            self.indent(2), self.fd.write('m_' + sm.name.lower() + 'sub.start();\n')
+        # User's init code
+        if self.fsm.extra_code.init != '':
+            self.indent(2), self.fd.write('\n// Init user code\n')
+            self.fd.write(self.fsm.extra_code.init)
+        # Initial internal transition
+        if self.fsm.graph.nodes['[*]']['data'].internal != '':
+            self.indent(2), self.fd.write('\n// Internal transition\n')
+            self.fd.write(self.fsm.graph.nodes['[*]']['data'].internal)
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
     ### Generate external events to the state machine (public methods).
     ###########################################################################
     def generate_event_methods(self):
+        # Broadcasr external events to nested state machine
+        for (sm, e) in self.fsm.broadcasts:
+            self.generate_method_comment('Broadcast external event.')
+            self.indent(1), self.fd.write('inline '), self.fd.write(e.header())
+            self.fd.write(' { m_' + sm.lower() + 'sub.' + e.brodcast() + ' }\n\n')
+        # React to external events
         for event, arcs in self.fsm.lookup_events.items():
             if event.name == '':
                 continue
@@ -1265,6 +1296,9 @@ class Parser(object):
                 N = int(self.tokens[i+1])
                 self.parse_event(tr.event, self.tokens[i+2:i+2+N])
                 self.check_valid_method_name(tr.event.name)
+                # Make the main state machine broadcast external events to nested state machine
+                if self.fsm.parent != None:
+                    self.machines[0].broadcasts.append((self.fsm.name, tr.event))
                 # Events are optional. If not given, we use them as anonymous internal event.
                 # Store them in a dictionary: "event => (origin, destination) states" to create
                 # the state transition for each event.
