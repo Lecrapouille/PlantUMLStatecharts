@@ -1035,18 +1035,24 @@ class Parser(object):
     ###########################################################################
     ### Generate the main function doing unit tests
     ###########################################################################
-    def generate_unit_tests_main_function(self, filename):
+    def generate_unit_tests_main_function(self, filename, files):
+        self.fd = open(filename, 'w')
+        self.fd.write('#include <gmock/gmock.h>\n')
+        self.fd.write('#include <gtest/gtest.h>\n')
+        self.fd.write('using namespace ::testing;\n\n')
         self.generate_function_comment(
             'Compile with one of the following line:\n'
             '//! g++ --std=c++14 -Wall -Wextra -Wshadow '
-            '-I../../include -DFSM_DEBUG ' + os.path.basename(filename) +
+            '-I../../include -DFSM_DEBUG \n//! '
+            + ' '.join(files) + ' \n//! ' + filename +
             ' `pkg-config --cflags --libs gtest gmock`')
         self.fd.write('int main(int argc, char *argv[])\n{\n')
         self.indent(1), self.fd.write('// The following line must be executed to initialize Google Mock\n')
         self.indent(1), self.fd.write('// (and Google Test) before running the tests.\n')
         self.indent(1), self.fd.write('::testing::InitGoogleMock(&argc, argv);\n')
         self.indent(1), self.fd.write('return RUN_ALL_TESTS();\n')
-        self.fd.write('}\n\n')
+        self.fd.write('}\n')
+        self.fd.close()
 
     ###########################################################################
     ### Code generator: Add an example of how using this state machine. It
@@ -1063,7 +1069,6 @@ class Parser(object):
         self.generate_unit_tests_mocked_class()
         self.generate_unit_tests_check_cycles()
         self.generate_unit_tests_pathes_to_sinks()
-        self.generate_unit_tests_main_function(filename)
         self.generate_unit_tests_footer()
         self.fd.close()
 
@@ -1085,10 +1090,16 @@ class Parser(object):
     ### macros ...
     ###########################################################################
     def generate_code(self, cxxfile):
+        files = []
         for self.fsm in self.machines:
+            f = self.fsm.class_name + 'Tests.cpp'
+            files.append(f)
             f = self.fsm.class_name + '.' +  cxxfile
             self.generate_state_machine(f)
             self.generate_unit_tests(f)
+        mainfile = 'main' + self.machines[0].class_name + '.cpp'
+        mainfile = os.path.join(os.path.dirname(cxxfile), mainfile)
+        self.generate_unit_tests_main_function(mainfile, files)
 
     ###########################################################################
     ### Manage transitions without events: we name them internal event and the
