@@ -190,6 +190,9 @@ class StateMachine(object):
         # leaving and entering to the same state or two events from a source
         # state going to the same destination state.
         self.graph = nx.DiGraph()
+        # Parent FSM
+        self.children = []
+        self.parent = None
         # Dictionnary of "event => (source state, destination state)" needed for
         # computing tables of state transitions for each events.
         self.lookup_events = defaultdict(list)
@@ -202,6 +205,15 @@ class StateMachine(object):
         # Generate C++ warnings inside the generated file when missformed state
         # machine is detected.
         self.warnings = ''
+
+    def __str__(self):
+        return 'FSM: ' + self.name
+
+    ###########################################################################
+    ### TODO transition if composite() sinon transition dans la meme FSM
+    ###########################################################################
+    def is_composite(self):
+        return False
 
     ###########################################################################
     ### Add a graph node with a dummy attribute named 'data' of type State.
@@ -284,9 +296,10 @@ class Parser(object):
         self.fd = None
         # Name of the plantUML file (input of the tool).
         self.umlfile = ''
-        # List of StateMachine
+        # List of StateMachine FIXME dictionnary: if self.machines[transition.destination].is_composite ...
         self.machines = [] # StateMachine()
-        # Current FSM
+        # Current FSM (used as side effect instead of passing the current FSM
+        # as argument to functions. Ok maybe consider as dirty!)
         self.fsm = StateMachine()
 
     ###########################################################################
@@ -396,9 +409,10 @@ class Parser(object):
         if hpp:
             self.fd.write('#ifndef ' + self.fsm.class_name.upper() + '_HPP\n')
             self.fd.write('#  define ' + self.fsm.class_name.upper() + '_HPP\n\n')
-        self.generate_include(indent, '"', 'StateMachine.hpp', '"')
-        #for fsm in self.machines:
-        #    self.generate_include(indent, '"', fsm.name + '.hpp', '"')
+        for sm in self.fsm.children:
+            self.generate_include(indent, '"', sm.class_name + '.hpp', '"')
+        if len(self.fsm.children) == 0:
+            self.generate_include(indent, '"', 'StateMachine.hpp', '"')
         self.fd.write(self.fsm.extra_code.header)
         self.fd.write('\n')
 
@@ -696,6 +710,9 @@ class Parser(object):
         self.generate_transition_methods()
         self.fd.write('private: // Actions on states\n\n')
         self.generate_state_methods()
+        self.fd.write('private: // Sub state machines\n\n')
+        for sm in self.fsm.children:
+            self.indent(1), self.fd.write(sm.class_name + ' m_' + sm.class_name.lower() + ';\n')
         if self.fsm.extra_code.functions != '':
             self.indent(1), self.fd.write('// Client code\n')
         self.fd.write(self.fsm.extra_code.functions)
@@ -1037,8 +1054,10 @@ class Parser(object):
     ### macros ...
     ###########################################################################
     def generate_code(self, cxxfile):
-        self.generate_state_machine(cxxfile)
-        self.generate_unit_tests(cxxfile)
+        for self.fsm in self.machines:
+            f = self.fsm.class_name + '.' +  cxxfile
+            self.generate_state_machine(f)
+            self.generate_unit_tests(f)
 
     ###########################################################################
     ### Manage transitions without events: we name them internal event and the
@@ -1169,9 +1188,10 @@ class Parser(object):
     ### add instead warnings to prevent him.
     ###########################################################################
     def finalize_machine(self):
-        self.is_state_machine_determinist()
-        self.manage_noevents()
-        self.verify_infinite_loops()
+        for self.fsm in self.machines:
+            self.is_state_machine_determinist()
+            self.manage_noevents()
+            self.verify_infinite_loops()
 
     ###########################################################################
     ### Parse an event.
@@ -1322,7 +1342,7 @@ class Parser(object):
                         self.tokens.append(str(j))
             self.parse_transition(True)
         else:
-            self.fatal('Bad syntax describing a state. Unkown token "' + what + '"')
+            self.fatal('Bad syntax describing a state. Unkown token "' + inst.data + '"')
 
     ###########################################################################
     ### Extend the PlantUML single-line comments to add extra commands to help
@@ -1373,10 +1393,7 @@ class Parser(object):
     ### Traverse the Abstract Syntax Tree of the PlantUML file
     ###########################################################################
     def visit_ast(self, inst):
-        if inst.data == 'state_diagram':  # FIXME To be removed when creating the AST
-            for c in inst.children:
-                self.visit_ast(c)
-        elif inst.data == 'cpp_code':
+        if inst.data == 'cpp_code':
             self.parse_extra_code(str(inst.children[0]), inst.children[1].strip())
         elif inst.data == 'transition':
             # Note: we have to convert into a list of tokens since parse_state()
@@ -1394,6 +1411,23 @@ class Parser(object):
                     for j in inst.children[i].children:
                         self.tokens.append(str(j))
             self.parse_transition(False)
+        elif inst.data == 'state_block':
+            # Recursive operation
+            backup_fsm = self.fsm
+            # Make the parser knows the list of state machine (one generated file by state machine)
+            self.machines.append(StateMachine())
+            self.fsm = self.machines[-1]
+            # Set the new name
+            self.fsm.name = str(inst.children[0])
+            self.fsm.class_name = self.fsm.name + 'Sub'
+            self.fsm.enum_name = self.fsm.class_name + 'States'
+            # Create links parent/sibling
+            self.fsm.parent = backup_fsm
+            backup_fsm.children.append(self.fsm)
+            # Recursive operation
+            for c in inst.children[1:]:
+                self.visit_ast(c)
+            self.fsm = backup_fsm
         elif inst.data[0:6] == 'state_':
             self.parse_state(inst)
         elif inst.data in ['comment', 'skin', 'hide']:
@@ -1449,7 +1483,7 @@ class Parser(object):
             sys.exit(-1)
         self.parse_plantuml_file(umlfile, classname)
         self.finalize_machine()
-        self.generate_code(self.fsm.class_name + '.' + cpp_or_hpp)
+        self.generate_code(cpp_or_hpp)
 
 ###############################################################################
 ### Display command line usage

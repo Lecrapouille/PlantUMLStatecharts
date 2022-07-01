@@ -70,7 +70,7 @@ LDFLAGS = `pkg-config --libs gtest gmock`
 # POSTCOMPILE = $(Q)mv -f $(BUILD)/$*$(PREFIX).Td $(BUILD)/$*$(PREFIX).d
 
 # Files to compile
-TARGETS = SimpleFSM
+TARGETS = SimpleComposite
 # SimpleFSM LaneKeeping Gumball InfiniteLoop BadSwitch1 BadSwitch2 FixBadSwitch2 RichMan EthernetBox Motor SelfParking
 
 # RichMan: unit test OK
