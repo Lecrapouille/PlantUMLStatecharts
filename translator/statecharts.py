@@ -1209,7 +1209,6 @@ class Parser(object):
     ###########################################################################
     def check_valid_method_name(self, name):
         s = name.split('(')[0]
-        print("check_valid_method_name", name, s)
         if s in ['start', 'stop', 'state', 'c_str', 'transition' ]:
             self.warning('The C++ method name ' + name + ' is already used by the base class StateMachine')
 
