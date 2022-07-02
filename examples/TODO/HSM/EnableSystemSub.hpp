@@ -1,15 +1,15 @@
 // This file as been generated the June 29, 2022 from the PlantUML statechart ../SimpleComposite.plantuml
 // This code generation is still experimental. Some border cases may not be correctly managed!
 
-#ifndef EnableSystem_HPP
-#  define EnableSystem_HPP
+#ifndef ENABLESYSTEMSUB_HPP
+#  define ENABLESYSTEMSUB_HPP
 
 #  include "StateMachine.hpp"
 
 //********************************************************************************
 //! \brief States of the state machine.
 //********************************************************************************
-enum class EnableSystemStates
+enum class EnableSystemSubStates
 {
     // Client states:
     CONSTRUCTOR,
@@ -22,13 +22,13 @@ enum class EnableSystemStates
 //********************************************************************************
 //! \brief Convert enum states to human readable string.
 //********************************************************************************
-static inline const char* stringify(EnableSystemStates const state)
+static inline const char* stringify(EnableSystemSubStates const state)
 {
     static const char* s_states[] =
     {
-        [int(EnableSystemStates::CONSTRUCTOR)] = "[*]",
-        [int(EnableSystemStates::ON)] = "ON",
-        [int(EnableSystemStates::OFF)] = "OFF",
+        [int(EnableSystemSubStates::CONSTRUCTOR)] = "[*]",
+        [int(EnableSystemSubStates::ON)] = "ON",
+        [int(EnableSystemSubStates::OFF)] = "OFF",
     };
 
     return s_states[int(state)];
@@ -37,15 +37,15 @@ static inline const char* stringify(EnableSystemStates const state)
 //********************************************************************************
 //! \brief State machine concrete implementation.
 //********************************************************************************
-class EnableSystem : public StateMachine<EnableSystem, EnableSystemStates>
+class EnableSystemSub : public StateMachine<EnableSystemSub, EnableSystemSubStates>
 {
-public: // CONSTRUCTOR and external events
+public: // Constructor and external events
 
     //----------------------------------------------------------------------------
-    //! \brief Default CONSTRUCTOR. Start from initial state and call it actions.
+    //! \brief Default constructor. Start from initial state and call it actions.
     //----------------------------------------------------------------------------
-    EnableSystem()
-        : StateMachine(EnableSystemStates::CONSTRUCTOR)
+    EnableSystemSub()
+        : StateMachine(EnableSystemSubStates::CONSTRUCTOR)
     {
     }
 
@@ -53,7 +53,7 @@ public: // CONSTRUCTOR and external events
     //----------------------------------------------------------------------------
     //! \brief Needed because of virtual methods.
     //----------------------------------------------------------------------------
-    virtual ~EnableSystem() = default;
+    virtual ~EnableSystemSub() = default;
 #endif
 
     //----------------------------------------------------------------------------
@@ -63,10 +63,10 @@ public: // CONSTRUCTOR and external events
     {
         StateMachine::start();
         {
-            LOGD("[EnableSystem][STATE [*]] Candidate for internal transitioning to state ON\n");
+            LOGD("[ENABLESYSTEMSUB][STATE [*]] Candidate for internal transitioning to state ON\n");
             static const Transition tr =
             {
-                .destination = EnableSystemStates::ON,
+                .destination = EnableSystemSubStates::ON,
             };
             transition(&tr);
             return ;
@@ -78,14 +78,14 @@ public: // CONSTRUCTOR and external events
     //----------------------------------------------------------------------------
     void off()
     {
-        LOGD("[EnableSystem][EVENT %s]\n", __func__);
+        LOGD("[ENABLESYSTEMSUB][EVENT %s]\n", __func__);
 
         static const Transitions s_transitions =
         {
             {
-                EnableSystemStates::ON,
+                EnableSystemSubStates::ON,
                 {
-                    .destination = EnableSystemStates::OFF,
+                    .destination = EnableSystemSubStates::OFF,
                 },
             },
         };
@@ -98,20 +98,25 @@ public: // CONSTRUCTOR and external events
     //----------------------------------------------------------------------------
     void on()
     {
-        LOGD("[EnableSystem][EVENT %s]\n", __func__);
+        LOGD("[ENABLESYSTEMSUB][EVENT %s]\n", __func__);
 
         static const Transitions s_transitions =
         {
             {
-                EnableSystemStates::OFF,
+                EnableSystemSubStates::OFF,
                 {
-                    .destination = EnableSystemStates::ON,
+                    .destination = EnableSystemSubStates::ON,
                 },
             },
         };
 
         transition(s_transitions);
     }
+private: // Guards and actions on transitions
+
+private: // Actions on states
+
+private: // Sub state machines
 };
 
-#endif // EnableSystem_HPP
+#endif // ENABLESYSTEMSUB_HPP

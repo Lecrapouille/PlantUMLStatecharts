@@ -1,17 +1,17 @@
-// This file as been generated the June 29, 2022 from the PlantUML statechart ../SimpleComposite.plantuml
+// This file as been generated the June 29, 2022 from the PlantUML statechart ../SimpleSimpleCompositeController.plantuml
 // This code generation is still experimental. Some border cases may not be correctly managed!
 
-#ifndef Composite_HPP
-#  define Composite_HPP
+#ifndef SIMPLECOMPOSITECONTROLLER_HPP
+#  define SIMPLECOMPOSITECONTROLLER_HPP
 
-#  include "Secondaire.hpp"
+#  include "EnableSystemSub.hpp"
 
 //********************************************************************************
 //! \brief States of the state machine.
 //********************************************************************************
-enum class CompositeStates
+enum class SimpleCompositeControllerStates
 {
-    // Composite:
+    // Client states:
     CONSTRUCTOR,
     ENABLESYSTEM,
     DISABLESYSTEM,
@@ -22,13 +22,13 @@ enum class CompositeStates
 //********************************************************************************
 //! \brief Convert enum states to human readable string.
 //********************************************************************************
-static inline const char* stringify(CompositeStates const state)
+static inline const char* stringify(SimpleCompositeControllerStates const state)
 {
     static const char* s_states[] =
     {
-        [int(CompositeStates::CONSTRUCTOR)] = "[*]",
-        [int(CompositeStates::ENABLESYSTEM)] = "ENABLESYSTEM",
-        [int(CompositeStates::DISABLESYSTEM)] = "DISABLESYSTEM",
+        [int(SimpleCompositeControllerStates::CONSTRUCTOR)] = "[*]",
+        [int(SimpleCompositeControllerStates::ENABLESYSTEM)] = "ENABLESYSTEM",
+        [int(SimpleCompositeControllerStates::DISABLESYSTEM)] = "DISABLESYSTEM",
     };
 
     return s_states[int(state)];
@@ -37,15 +37,15 @@ static inline const char* stringify(CompositeStates const state)
 //********************************************************************************
 //! \brief State machine concrete implementation.
 //********************************************************************************
-class Composite : public StateMachine<Composite, CompositeStates>
+class SimpleCompositeController : public StateMachine<SimpleCompositeController, SimpleCompositeControllerStates>
 {
 public: // Constructor and external events
 
     //----------------------------------------------------------------------------
     //! \brief Default constructor. Start from initial state and call it actions.
     //----------------------------------------------------------------------------
-    Composite()
-        : StateMachine(CompositeStates::CONSTRUCTOR)
+    SimpleCompositeController()
+        : StateMachine(SimpleCompositeControllerStates::CONSTRUCTOR)
     {
     }
 
@@ -53,25 +53,23 @@ public: // Constructor and external events
     //----------------------------------------------------------------------------
     //! \brief Needed because of virtual methods.
     //----------------------------------------------------------------------------
-    virtual ~Composite() = default;
+    virtual ~SimpleCompositeController() = default;
 #endif
 
-    //----------------------------------------------------------------------------
-    //! \brief Reset the state machine.
-    //----------------------------------------------------------------------------
+    //---------------------------------------------------------------------------------------
+    //! \brief Reset the state machine and nested machines. Do the initial internal transition.
+    //---------------------------------------------------------------------------------------
     void start()
     {
         StateMachine::start();
-
-        m_enable_system_enabled = true;
-        m_enable_system.start();
+        m_enablesystemsub.start();
 
         // Internal transition
         {
-            LOGD("[Composite][STATE [*]] Candidate for internal transitioning to state ENABLESYSTEM\n");
+            LOGD("[SIMPLECOMPOSITECONTROLLER][STATE [*]] Candidate for internal transitioning to state ENABLESYSTEM\n");
             static const Transition tr =
             {
-                .destination = CompositeStates::ENABLESYSTEM,
+                .destination = SimpleCompositeControllerStates::ENABLESYSTEM,
             };
             transition(&tr);
             return ;
@@ -79,50 +77,30 @@ public: // Constructor and external events
     }
 
     //----------------------------------------------------------------------------
-    //! \brief External event.
+    //! \brief Broadcast external event.
     //----------------------------------------------------------------------------
-    void off()
-    {
-        if (m_enable_system_enabled)
-        {
-            m_enable_system.off();
-        }
-        else
-        {
-           LOGD("Sorry FSM enable_system is disabled\n");
-        }
-    }
+    inline void off() { m_enablesystemsub.off(); }
 
     //----------------------------------------------------------------------------
-    //! \brief External event.
+    //! \brief Broadcast external event.
     //----------------------------------------------------------------------------
-    void on()
-    {
-        if (m_enable_system_enabled)
-        {
-            m_enable_system.on();
-        }
-        else
-        {
-           LOGD("Sorry FSM enable_system is disabled\n");
-        }
-    }
+    inline void on() { m_enablesystemsub.on(); }
 
     //----------------------------------------------------------------------------
     //! \brief External event.
     //----------------------------------------------------------------------------
     void disable()
     {
-        LOGD("[Composite][EVENT %s]\n", __func__);
+        LOGD("[SIMPLECOMPOSITECONTROLLER][EVENT %s]\n", __func__);
 
-        m_enable_system_enabled = false;
+m_enable_system.stop();
 
         static const Transitions s_transitions =
         {
             {
-                CompositeStates::ENABLESYSTEM,
+                SimpleCompositeControllerStates::ENABLESYSTEM,
                 {
-                    .destination = CompositeStates::DISABLESYSTEM,
+                    .destination = SimpleCompositeControllerStates::DISABLESYSTEM,
                 },
             },
         };
@@ -135,17 +113,16 @@ public: // Constructor and external events
     //----------------------------------------------------------------------------
     void enable()
     {
-        LOGD("[Composite][EVENT %s]\n", __func__);
+        LOGD("[SIMPLECOMPOSITECONTROLLER][EVENT %s]\n", __func__);
 
-        m_enable_system_enabled = true;
         m_enable_system.start();
 
         static const Transitions s_transitions =
         {
             {
-                CompositeStates::DISABLESYSTEM,
+                SimpleCompositeControllerStates::DISABLESYSTEM,
                 {
-                    .destination = CompositeStates::ENABLESYSTEM,
+                    .destination = SimpleCompositeControllerStates::ENABLESYSTEM,
                 },
             },
         };
@@ -153,13 +130,13 @@ public: // Constructor and external events
         transition(s_transitions);
     }
 
-public:
+private: // Guards and actions on transitions
 
-   EnableSystem m_enable_system;
+private: // Actions on states
 
-private:
+private: // Sub state machines
 
-   bool m_enable_system_enabled = false;
+    EnableSystemSub m_enablesystemsub;
 };
 
-#endif // Composite_HPP
+#endif // SIMPLECOMPOSITECONTROLLER_HPP
