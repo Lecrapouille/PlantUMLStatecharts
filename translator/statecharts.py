@@ -145,15 +145,15 @@ class Transition(object):
 ###############################################################################
 class State(object):
     def __init__(self, name):
-        # State name (upper case).
+        # PlantUML state (raw name + upper case, i.e. '[*]' or 'STATE1').
         self.name = name
-        # Optional C++ comment
+        # Optional C++ comment.
         self.comment = ''
-        # Action to perform when entering the state.
+        # Action to perform when entering the state (C++ code).
         self.entering = ''
-        # Action to perform when leaving the state.
+        # Action to perform when leaving the state (C++ code).
         self.leaving = ''
-        # State activity.
+        # State activity (FIXME to be defined).
         self.activity = ''
         # Internal transition when no events are explicitely set.
         self.internal = ''
@@ -163,7 +163,7 @@ class State(object):
         self.count_leaving = 0
 
     def __str__(self):
-        return self.name + ': ' + self.entering + ' / ' + self.leaving
+        return self.name + '(entering: ' + self.entering + ') (exit:' + self.leaving + ')'
 
 ###############################################################################
 ### Structure holding extra C++ code to be merged within the generated code.
@@ -192,37 +192,42 @@ class ExtraCode(object):
 ###############################################################################
 class StateMachine(object):
     def __init__(self):
-        # Stem of the plantUML file.
-        self.name = ''
-        # The name of the generated C++ state machine class.
-        self.class_name = ''
-        # The name of the generated C++ state machine enum.
-        self.enum_name = ''
-        # Store the graph of the state machine.
+        # The state machine representation as graph structure.
         # FIXME shall be nx.MultiDiGraph() since we cannot create several events
         # leaving and entering to the same state or two events from a source
         # state going to the same destination state.
         self.graph = nx.DiGraph()
-        # Parent FSM
-        self.children = []
+        # Know the parent state machine (needed for composite state).
         self.parent = None
-        # From: external (if '' else state machine if not empty)
-        self.broadcasts = []
-        # Dictionnary of "event => (source state, destination state)" needed for
-        # computing tables of state transitions for each events.
-        self.lookup_events = defaultdict(list)
+        # Know the nested state machines (needed for composite state).
+        self.children = []
         # Memorize the initial state of the state machine.
         self.initial_state = ''
         # Memorize the final state of the state machine.
         self.final_state = ''
-        # Extra C++ code to be merged inside the generated file.
+        # Dictionnary of "event => (source state, destination state)" needed for
+        # computing tables of state transitions for each events.
+        self.lookup_events = defaultdict(list)
+        # Broadcast external event to nested state machines (for composite
+        # state only).
+        self.broadcasts = [] # tuple (state machine name, Event)
+        # Stem of the plantUML file.
+        self.name = ''
+        # The name of the generated C++ state machine class.
+        self.class_name = ''
+        # The name of the generated C++ enumerates for defining states.
+        self.enum_name = ''
+        # Extra lines of C++ code to be merged inside the generated file.
         self.extra_code = ExtraCode()
-        # Generate C++ warnings inside the generated file when missformed state
+        # C++ warnings inside the generated file when missformed state
         # machine is detected.
         self.warnings = ''
 
     def __str__(self):
-        return 'FSM: ' + self.name
+        return self.name
+
+    def __repr__(self):
+        return self.name + ', I: ' + self.initial_state
 
     ###########################################################################
     ### TODO transition if composite() sinon transition dans la meme FSM
@@ -311,11 +316,13 @@ class Parser(object):
         self.fd = None
         # Name of the plantUML file (input of the tool).
         self.umlfile = ''
-        # List of StateMachine FIXME dictionnary: if self.machines[transition.destination].is_composite ...
-        self.machines = [] # StateMachine()
+        # Dictionnary of StateMachine
+        self.machines = dict() # StateMachine()
         # Current FSM (used as side effect instead of passing the current FSM
         # as argument to functions. Ok maybe consider as dirty!)
         self.fsm = StateMachine()
+        # Name of the master state machine (self.machines[self.main_fsm])
+        self.main_fsm = ''
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
@@ -600,7 +607,9 @@ class Parser(object):
         self.fd.write(self.fsm.class_name + '(' + self.fsm.extra_code.argvs + ')\n')
         self.indent(2), self.fd.write(': StateMachine(' + self.state_enum(self.fsm.initial_state) + ')\n')
         self.indent(1), self.fd.write('{\n')
+        self.indent(2), self.fd.write('// Init actions on states\n')
         self.generate_table_of_states()
+        self.fd.write('\n'), self.indent(2), self.fd.write('// Init user code\n')
         self.fd.write(self.fsm.extra_code.init)
         self.indent(1), self.fd.write('}\n\n')
 
@@ -628,11 +637,11 @@ class Parser(object):
             self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
         # User's init code
         if self.fsm.extra_code.init != '':
-            self.indent(2), self.fd.write('\n// Init user code\n')
+            self.fd.write('\n'), self.indent(2), self.fd.write('// Init user code\n')
             self.fd.write(self.fsm.extra_code.init)
         # Initial internal transition
         if self.fsm.graph.nodes['[*]']['data'].internal != '':
-            self.indent(2), self.fd.write('\n// Internal transition\n')
+            self.fd.write('\n'), self.indent(2), self.fd.write('// Internal transition\n')
             self.fd.write(self.fsm.graph.nodes['[*]']['data'].internal)
         self.indent(1), self.fd.write('}\n\n')
 
@@ -1132,13 +1141,13 @@ class Parser(object):
     ###########################################################################
     def generate_code(self, cxxfile):
         files = []
-        for self.fsm in self.machines:
+        for self.fsm in self.machines.values():
             f = self.fsm.class_name + 'Tests.cpp'
             files.append(f)
             f = self.fsm.class_name + '.' +  cxxfile
             self.generate_state_machine(f)
             self.generate_unit_tests(f)
-        mainfile = 'main' + self.machines[0].class_name + '.cpp'
+        mainfile = 'main' + self.machines[self.main_fsm].class_name + '.cpp'
         mainfile = os.path.join(os.path.dirname(cxxfile), mainfile)
         self.generate_unit_tests_main_function(mainfile, files)
 
@@ -1271,7 +1280,7 @@ class Parser(object):
     ### add instead warnings to prevent him.
     ###########################################################################
     def finalize_machine(self):
-        for self.fsm in self.machines:
+        for self.fsm in self.machines.values():
             self.is_state_machine_determinist()
             self.manage_noevents()
             self.verify_infinite_loops()
@@ -1350,7 +1359,7 @@ class Parser(object):
                 self.check_valid_method_name(tr.event.name)
                 # Make the main state machine broadcast external events to nested state machine
                 if self.fsm.parent != None:
-                    self.machines[0].broadcasts.append((self.fsm.name, tr.event))
+                    self.machines[self.main_fsm].broadcasts.append((self.fsm.name, tr.event))
                 # Events are optional. If not given, we use them as anonymous internal event.
                 # Store them in a dictionary: "event => (origin, destination) states" to create
                 # the state transition for each event.
@@ -1501,12 +1510,12 @@ class Parser(object):
             # Recursive operation
             backup_fsm = self.fsm
             # Make the parser knows the list of state machine (one generated file by state machine)
-            self.machines.append(StateMachine())
-            self.fsm = self.machines[-1]
+            self.fsm = StateMachine()
             # Set the new name
             self.fsm.name = str(inst.children[0])
             self.fsm.class_name = self.fsm.name + 'Sub'
             self.fsm.enum_name = self.fsm.class_name + 'States'
+            self.machines[self.fsm.name] = self.fsm
             # Create links parent/sibling
             self.fsm.parent = backup_fsm
             backup_fsm.children.append(self.fsm)
@@ -1539,11 +1548,12 @@ class Parser(object):
     def parse_plantuml_file(self, umlfile, postfix):
         self.umlfile = umlfile
         # Create the main state machine
-        self.machines.append(StateMachine())
-        self.fsm = self.machines[-1]
+        self.fsm = StateMachine()
         self.fsm.name = Path(self.umlfile).stem
         self.fsm.class_name = self.fsm.name + postfix
         self.fsm.enum_name = self.fsm.class_name + 'States'
+        self.machines[self.fsm.name] = self.fsm
+        self.main_fsm = self.fsm.name
         # Make the parser understand the plantUML grammar
         if self.parser == None:
             self.load_plantuml_grammar_file(os.path.join(os.getcwd(), 'statecharts.ebnf'))
