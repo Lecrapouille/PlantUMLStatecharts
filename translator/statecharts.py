@@ -444,7 +444,7 @@ class Parser(object):
     ###########################################################################
     def generate_footer(self, hpp):
         if self.fsm.warnings != '':
-            self.fd.write('#warning "' + self.fsm.warnings + '"\n\n')
+            self.fd.write('\n#warning "' + self.fsm.warnings + '"\n')
         self.fd.write(self.fsm.extra_code.footer)
         if hpp:
             self.fd.write('#endif // ' + self.fsm.class_name.upper() + '_HPP')
@@ -1026,7 +1026,7 @@ class Parser(object):
                     # Cycle of non external evants => malformed state machine
                     # I think this case is not good
                     if self.fsm.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
-                        self.indent(1), self.fd.write('#warning "Malformed state machine: unreachable destination state"\n\n')
+                        self.indent(1), self.fd.write('\n#warning "Malformed state machine: unreachable destination state"\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
                         self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
