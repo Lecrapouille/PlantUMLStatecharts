@@ -195,7 +195,7 @@ public:
     //--------------------------------------------------------------------------
     //! \brief Restore the state machin to its initial state.
     //--------------------------------------------------------------------------
-    inline void start()
+    inline void enter()
     {
         LOGD("[STATE MACHINE] Restart the state machine\n");
         m_current_state = m_initial_state;
@@ -207,9 +207,18 @@ public:
     //--------------------------------------------------------------------------
     //! \brief Return the current state.
     //--------------------------------------------------------------------------
-    inline void stop()
+    inline void exit()
     {
         m_enabled = false;
+    }
+
+    //--------------------------------------------------------------------------
+    //! \brief Check whether the state machine is active meaning if it has been
+    //! entered.
+    //--------------------------------------------------------------------------
+    inline bool isActive() const
+    {
+        return m_enabled;
     }
 
     //--------------------------------------------------------------------------
@@ -247,7 +256,7 @@ public:
         {
             LOGD("[STATE MACHINE] Ignoring external event\n");
             //LOGE("[STATE MACHINE] Unknow transition. Aborting!\n");
-            //exit(EXIT_FAILURE);
+            //::exit(EXIT_FAILURE);
         }
     }
 
@@ -302,7 +311,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         if (m_nesting.size() >= 16u)
         {
             LOGE("[STATE MACHINE] Infinite loop detected. Abort!\n");
-            exit(EXIT_FAILURE);
+            ::exit(EXIT_FAILURE);
         }
         return ;
     }
@@ -321,7 +330,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         if (transition->destination == STATES_ID::CANNOT_HAPPEN)
         {
             LOGE("[STATE MACHINE] Forbidden event. Aborting!\n");
-            exit(EXIT_FAILURE);
+            ::exit(EXIT_FAILURE);
         }
 
         // Do not react to this event
@@ -335,7 +344,7 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
         else if (transition->destination >= STATES_ID::MAX_STATES)
         {
             LOGE("[STATE MACHINE] Unknown state. Aborting!\n");
-            exit(EXIT_FAILURE);
+            ::exit(EXIT_FAILURE);
         }
 
         // Reaction: call the member function associated to the current state

@@ -615,14 +615,14 @@ class Parser(object):
         self.fd.write('#endif\n\n')
 
     ###########################################################################
-    ### Generate the state machine start method (equivalent to a reset).
+    ### Generate the state machine initial entering method.
     ###########################################################################
-    def generate_reset_method(self):
+    def generate_enter_method(self):
         self.generate_method_comment('Reset the state machine and nested machines. Do the initial internal transition.')
-        self.indent(1), self.fd.write('void start()\n')
+        self.indent(1), self.fd.write('void enter()\n')
         self.indent(1), self.fd.write('{\n')
         # Init base class of the state machine
-        self.indent(2), self.fd.write('StateMachine::start();\n')
+        self.indent(2), self.fd.write('StateMachine::enter();\n')
         # Init nested state machines
         for sm in self.fsm.children:
             self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
@@ -634,6 +634,20 @@ class Parser(object):
         if self.fsm.graph.nodes['[*]']['data'].internal != '':
             self.indent(2), self.fd.write('\n// Internal transition\n')
             self.fd.write(self.fsm.graph.nodes['[*]']['data'].internal)
+        self.indent(1), self.fd.write('}\n\n')
+
+    ###########################################################################
+    ### Generate the state machine exting method.
+    ###########################################################################
+    def generate_exit_method(self):
+        self.generate_method_comment('Reset the state machine and nested machines. Do the initial internal transition.')
+        self.indent(1), self.fd.write('void exit()\n')
+        self.indent(1), self.fd.write('{\n')
+        # Init base class of the state machine
+        self.indent(2), self.fd.write('StateMachine::exit();\n')
+        # Init nested state machines
+        for sm in self.fsm.children:
+            self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -721,7 +735,7 @@ class Parser(object):
                 self.fd.write(state.leaving)
                 self.indent(1), self.fd.write('}\n\n')
             if state.internal != '':
-                # Initial node is already generated in the ::start() method (this save generating one method)
+                # Initial node is already generated in the ::enter() method (this save generating one method)
                 if node == '[*]':
                      continue
                 self.generate_method_comment('Do the internal transition when leaving the state ' + state.name + '.')
@@ -739,10 +753,12 @@ class Parser(object):
         self.fd.write('class ' + self.fsm.class_name + ' : public StateMachine<')
         self.fd.write(self.fsm.class_name + ', ' + self.fsm.enum_name + '>\n')
         self.fd.write('{\n')
-        self.fd.write('public: // Constructor and external events\n\n')
+        self.fd.write('public: // Constructor and destructor\n\n')
         self.generate_constructor_method()
         self.generate_destructor_method()
-        self.generate_reset_method()
+        self.generate_enter_method()
+        self.generate_exit_method()
+        self.fd.write('public: // External events\n\n')
         self.generate_event_methods()
         self.fd.write('private: // Guards and actions on transitions\n\n')
         self.generate_transition_methods()
@@ -926,7 +942,7 @@ class Parser(object):
         self.indent(1), self.fd.write('LOGD("Check initial state after constructor or reset.\\n");\n')
         self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
         self.indent(1), self.fd.write(self.fsm.class_name + ' ' + 'fsm; // Not mocked !\n')
-        self.indent(1), self.fd.write('fsm.start();\n\n')
+        self.indent(1), self.fd.write('fsm.enter();\n\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
 
@@ -951,7 +967,7 @@ class Parser(object):
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.fsm.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards(['[*]'] + cycle)
-            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.start();\n')
+            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.enter();\n')
             guard = self.fsm.graph[self.fsm.initial_state][cycle[0]]['data'].guard
             self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
             self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[0]) + ');\n')
@@ -1020,7 +1036,7 @@ class Parser(object):
             # Reset the state machine and print the guard supposed to reach this state
             self.indent(1), self.fd.write('Mock' + self.fsm.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards(path)
-            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.start();\n')
+            self.fd.write('\n'), self.indent(1), self.fd.write('fsm.enter();\n')
 
             # Iterate on all nodes of the path
             for i in range(len(path) - 1):
