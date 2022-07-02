@@ -549,6 +549,13 @@ class Parser(object):
         return s + 'onActivity_' + self.state_name(state)
 
     ###########################################################################
+    ### Return the C++ variable memeber of the nested state machine.
+    ### param[in] fsm the nested state machine.
+    ###########################################################################
+    def child_machine_instance(self, fsm):
+        return 'm_' + fsm.name.lower() + 'sub'
+
+    ###########################################################################
     ### Generate the table of states holding their entering or leaving actions.
     ### Note: the table may be empty (all states do not actions) in this case
     ### the table is not generated.
@@ -618,7 +625,7 @@ class Parser(object):
         self.indent(2), self.fd.write('StateMachine::start();\n')
         # Init nested state machines
         for sm in self.fsm.children:
-            self.indent(2), self.fd.write('m_' + sm.name.lower() + 'sub.start();\n')
+            self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
         # User's init code
         if self.fsm.extra_code.init != '':
             self.indent(2), self.fd.write('\n// Init user code\n')
@@ -743,7 +750,8 @@ class Parser(object):
         self.generate_state_methods()
         self.fd.write('private: // Sub state machines\n\n')
         for sm in self.fsm.children:
-            self.indent(1), self.fd.write(sm.class_name + ' m_' + sm.class_name.lower() + ';\n')
+            self.indent(1), self.fd.write(sm.class_name + ' ')
+            self.fd.write(self.child_machine_instance(sm) + ';\n')
         if self.fsm.extra_code.functions != '':
             self.indent(1), self.fd.write('// Client code\n')
         self.fd.write(self.fsm.extra_code.functions)
