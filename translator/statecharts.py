@@ -1086,10 +1086,6 @@ class Parser(object):
     ### Generate the main function doing unit tests
     ###########################################################################
     def generate_unit_tests_main_function(self, filename, files):
-        self.fd = open(filename, 'w')
-        self.fd.write('#include <gmock/gmock.h>\n')
-        self.fd.write('#include <gtest/gtest.h>\n')
-        self.fd.write('using namespace ::testing;\n\n')
         self.generate_function_comment(
             'Compile with one of the following line:\n'
             '//! g++ --std=c++14 -Wall -Wextra -Wshadow '
@@ -1102,6 +1098,16 @@ class Parser(object):
         self.indent(1), self.fd.write('::testing::InitGoogleMock(&argc, argv);\n')
         self.indent(1), self.fd.write('return RUN_ALL_TESTS();\n')
         self.fd.write('}\n')
+
+    ###########################################################################
+    ### Generate the main function doing unit tests
+    ###########################################################################
+    def generate_unit_tests_main_file(self, filename, files):
+        self.fd = open(filename, 'w')
+        self.fd.write('#include <gmock/gmock.h>\n')
+        self.fd.write('#include <gtest/gtest.h>\n')
+        self.fd.write('using namespace ::testing;\n\n')
+        self.generate_unit_tests_main_function(filename, files)
         self.fd.close()
 
     ###########################################################################
@@ -1112,13 +1118,15 @@ class Parser(object):
     ### FIXME Manage guard logic to know where to pass in edges.
     ### FIXME Cycles does not make all test case possible
     ###########################################################################
-    def generate_unit_tests(self, cxxfile):
+    def generate_unit_tests(self, cxxfile, files, separated):
         filename = self.fsm.class_name + 'Tests.cpp'
         self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
         self.generate_unit_tests_header()
         self.generate_unit_tests_mocked_class()
         self.generate_unit_tests_check_cycles()
         self.generate_unit_tests_pathes_to_sinks()
+        if not separated:
+            self.generate_unit_tests_main_function(filename, files)
         self.generate_unit_tests_footer()
         self.fd.close()
 
@@ -1138,18 +1146,21 @@ class Parser(object):
     ###########################################################################
     ### Code generator: entry point generating C++ files: state machine, tests,
     ### macros ...
+    ### param[in] separated if False then the main() function is generated in
+    ### the same file else in a separated.
     ###########################################################################
-    def generate_code(self, cxxfile):
+    def generate_code(self, cxxfile, separated):
         files = []
         for self.fsm in self.machines.values():
             f = self.fsm.class_name + 'Tests.cpp'
             files.append(f)
             f = self.fsm.class_name + '.' +  cxxfile
             self.generate_state_machine(f)
-            self.generate_unit_tests(f)
-        mainfile = 'main' + self.machines[self.main_fsm].class_name + '.cpp'
-        mainfile = os.path.join(os.path.dirname(cxxfile), mainfile)
-        self.generate_unit_tests_main_function(mainfile, files)
+            self.generate_unit_tests(f, files, separated)
+        if separated:
+            mainfile = self.machines[self.main_fsm].class_name + 'MainTests.cpp'
+            mainfile = os.path.join(os.path.dirname(cxxfile), mainfile)
+            self.generate_unit_tests_main_file(mainfile, files)
 
     ###########################################################################
     ### Manage transitions without events: we name them internal event and the
@@ -1579,7 +1590,7 @@ class Parser(object):
             sys.exit(-1)
         self.parse_plantuml_file(umlfile, postfix)
         self.finalize_machine()
-        self.generate_code(cpp_or_hpp)
+        self.generate_code(cpp_or_hpp, False)
 
 ###############################################################################
 ### Display command line usage
