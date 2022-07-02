@@ -652,6 +652,15 @@ class Parser(object):
 
     ###########################################################################
     ### Generate external events to the state machine (public methods).
+#FIXME
+# Manage the case of the transition goes or leaves a composite state
+#            if len(self.machines[origin].children) != 0:
+#                for sm in self.fsm.children:
+#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
+#            elif len(self.machines[destination].children) != 0:
+#                for sm in self.fsm.children:
+#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
+#            # Generate the table of transitions
     ###########################################################################
     def generate_event_methods(self):
         # Broadcasr external events to nested state machine
@@ -666,6 +675,14 @@ class Parser(object):
             self.generate_method_comment('External event.')
             self.indent(1), self.fd.write(event.header() + '\n')
             self.indent(1), self.fd.write('{\n')
+            # Manage the case of the transition goes or leaves a composite state
+#            if len(self.machines[origin].children) != 0:
+#                for sm in self.fsm.children:
+#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
+#            elif len(self.machines[destination].children) != 0:
+#                for sm in self.fsm.children:
+#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
+#            # Generate the table of transitions
             self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][EVENT %s]\\n", __func__);\n\n')
             self.indent(2), self.fd.write('static const Transitions s_transitions =\n')
             self.indent(2), self.fd.write('{\n')
