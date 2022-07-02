@@ -1,26 +1,47 @@
 @startuml
 skin rose
 
+'[header] #define Cevent bool
+'[code] private:
+'[code] void marchePompe() {}
+'[code] void arretPompe() {}
+'[code] void alarmeType1() {}
+'[code] void alarmeType3() {}
+'[code] Cevent AU;  // Bouton poussoire
+'[code] Cevent BPM; // Bouton poussoire
+'[code] Cevent BPA; // Bouton poussoire
+'[code] Cevent DPP; // Bouton poussoire
+'[code] Cevent HM;  // Bouton poussoire
+'[code] Cevent Acq; // Bouton poussoire
+'[code] Cevent DHM; // Bouton poussoire
+'[init] AU = false;
+'[init] BPM = false;
+'[init] BPA = false;
+'[init] DPP = false;
+'[init] HM = false;
+'[init] Acq = false;
+'[init] DHM = false;
+
 [*] --> PompeEnArret
-Default : entry / arret pompe
-Default : do / alarme type3
+Default : entry / arretPompe()
+Default : do / alarmeType3()
 
 state PompeEnMarche {
   state AttenteLiberationHM {
     MiseEnMarchePompe --> Attente40Secondes
-    MiseEnMarchePompe : entry / marche pompe
-    Attente40Secondes --> Attente20Secondes : after(40s)
-    Attente20Secondes --> Default : after(20s)
-    Attente20Secondes : do / alarme type1
+    MiseEnMarchePompe : entry / marchePompe()
+    Attente40Secondes --> Attente20Secondes : after40s
+    Attente20Secondes --> Default : after20s
+    Attente20Secondes : do / alarmeType1()
   }
 
-  AttenteLiberationHM -> AttenteHM : !HM
+  AttenteLiberationHM -> AttenteHM : falling HM
   AttenteHM : do / alarme type2
-  Attente40Secondes <- AttenteHM : HM
-  AttenteHM --> Default : after(5s)
+  Attente40Secondes <- AttenteHM : rising HM
+  AttenteHM --> Default : after5s
 }
 
-PompeEnArret --> MiseEnMarchePompe : BPM [HM && (!AU) && (!DHM) && (!DDP)]
+PompeEnArret --> MiseEnMarchePompe : BPM [HM && (!AU) && (!DHM) && (!DPP)]
 RemiseEnService -> PompeEnArret
 RemiseEnService <- Default : Acq
 PompeEnArret <-- PompeEnMarche : AU
