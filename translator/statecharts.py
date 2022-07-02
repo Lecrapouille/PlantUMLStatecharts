@@ -60,6 +60,33 @@ class Event(object):
         self.params = []
 
     ###########################################################################
+    ### Parse an event.
+    ### TODO for the moment we do not manage boolean expression
+    ### TODO manage builtins such as "when(event)" or "after(x)"
+    ###########################################################################
+    def parse_event(self, tokens):
+        self.params = []
+        N = len(tokens)
+        if N == 0: # No event
+            self.name = ''
+            return
+        for i in range(0, N):
+            # Split param if and only if on the last elements of tokens
+            if tokens[i][0] == '(':
+                if i != N-1:
+                    self.fatal('Bad parentesis')
+                self.params = tokens[i].split('(')[1][:-1].split(',')
+            # If single event name: do not change case, else first token is lower
+            elif i == 0:
+                if i < N-1 and tokens[i+1][0] == '(':
+                   self.name = tokens[i]
+                else:
+                   self.name += tokens[i].lower()
+            # Other tokens for event name: capitalize
+            else:
+                self.name += tokens[i].capitalize()
+
+    ###########################################################################
     ### Generate the definition of the C++ method.
     ###########################################################################
     def header(self):
@@ -67,32 +94,29 @@ class Event(object):
         for p in self.params:
             if params != '':
                 params += ', '
-            params += p.upper() + ' const& ' + p
+            params += p.upper() + ' const& ' + p + '_'
         return 'void ' + self.name + '(' + params + ')'
 
     ###########################################################################
     ### Generate the call of the C++ method.
     ###########################################################################
-    def caller(self):
-        i = 0
+    def caller(self, subject=''):
+        s = '' if subject == '' else subject + '.'
         params = ''
         for p in self.params:
             if params != '':
-                params += ', ' + self.name.lower() + '_x[' + str(i) + ']'
-                i += 1
-            params += p.lower()
+                params += ', '
+            params += s + p
         return self.name + '(' + params + ')'
 
     ###########################################################################
     ###
     ###########################################################################
     def brodcast(self):
-        i = 0
         params = ''
         for p in self.params:
             if params != '':
                 params += ', ' + p
-                i += 1
             params += p.lower()
         return self.name + '(' + params + ');'
 
@@ -684,15 +708,16 @@ class Parser(object):
             self.generate_method_comment('External event.')
             self.indent(1), self.fd.write(event.header() + '\n')
             self.indent(1), self.fd.write('{\n')
-            # Manage the case of the transition goes or leaves a composite state
-#            if len(self.machines[origin].children) != 0:
-#                for sm in self.fsm.children:
-#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
-#            elif len(self.machines[destination].children) != 0:
-#                for sm in self.fsm.children:
-#                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
-#            # Generate the table of transitions
-            self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][EVENT %s]\\n", __func__);\n\n')
+            # Display data event
+            self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][EVENT %s]')
+            if len(event.params) != 0:
+                self.fd.write(' with params XXX') # FIXME a finir
+            self.fd.write('\\n", __func__);\n\n')
+            # Copy data event
+            for arg in event.params:
+                self.indent(2), self.fd.write(arg + ' = ' + arg + '_;\n\n')
+            # Table of transitions
+            self.indent(2), self.fd.write('// State transition and actions\n')
             self.indent(2), self.fd.write('static const Transitions s_transitions =\n')
             self.indent(2), self.fd.write('{\n')
             for origin, destination in arcs:
@@ -794,8 +819,12 @@ class Parser(object):
         for sm in self.fsm.children:
             self.indent(1), self.fd.write(sm.class_name + ' ')
             self.fd.write(self.child_machine_instance(sm) + ';\n')
-        if self.fsm.extra_code.functions != '':
-            self.indent(1), self.fd.write('// Client code\n')
+        self.fd.write('private: // Data events\n\n')
+        for event, arcs in self.fsm.lookup_events.items():
+            for arg in event.params:
+                self.indent(1), self.fd.write('//! \\brief Data for event ' + event.name + '\n')
+                self.indent(1), self.fd.write(arg.upper() + ' ' + arg + ';\n')
+        self.fd.write('\nprivate: // Client code\n\n')
         self.fd.write(self.fsm.extra_code.functions)
         self.fd.write('};\n\n')
 
@@ -810,9 +839,6 @@ class Parser(object):
         self.fd.write('#include <gtest/gtest.h>\n')
         self.fd.write('#include <cstring>\n\n')
         self.fd.write('using namespace ::testing;\n\n')
-        self.fd.write(self.fsm.extra_code.unit_tests)
-        if self.fsm.extra_code.unit_tests != '':
-            self.fd.write('\n')
 
     ###########################################################################
     ### Generate the footer part of the unit test file.
@@ -852,6 +878,13 @@ class Parser(object):
                 self.fd.write('MOCK_METHOD(void, ')
                 self.fd.write(self.state_leaving_function(node, False))
                 self.fd.write(', (), (override));\n')
+        for event, arcs in self.fsm.lookup_events.items():
+            for arg in event.params:
+                self.indent(1), self.fd.write('// Data for event ' + event.name + '\n')
+                self.indent(1), self.fd.write(arg.upper() + ' ' + arg + '{};\n')
+        self.fd.write(self.fsm.extra_code.unit_tests)
+        if self.fsm.extra_code.unit_tests != '':
+            self.fd.write('\n')
         self.fd.write('};\n\n')
 
     ###########################################################################
@@ -1007,7 +1040,7 @@ class Parser(object):
 #                    tr = self.fsm.graph[cycle[i]][cycle[i]]['data']
 #                    if tr.event.name != '':
 #                        self.indent(1), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + ']// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
-#                        self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';')
+#                        self.indent(1), self.fd.write('fsm.' + tr.event.caller('fsm') + ';')
 #                        if tr.guard != '':
 #                            self.fd.write(' // If ' + tr.guard)
 #                        self.fd.write('\n')
@@ -1020,7 +1053,7 @@ class Parser(object):
                 if tr.event.name != '':
                     self.fd.write('\n'), self.indent(1)
                     self.fd.write('LOGD("\\n[' + self.fsm.class_name.upper() + '] Triggering event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
-                    self.indent(1), self.fd.write('fsm.' + tr.event.caller() + ';\n')
+                    self.indent(1), self.fd.write('fsm.' + tr.event.caller('fsm') + ';\n')
 
                 if (i == len(cycle) - 2):
                     # Cycle of non external evants => malformed state machine
@@ -1297,37 +1330,6 @@ class Parser(object):
             self.verify_infinite_loops()
 
     ###########################################################################
-    ### Parse an event.
-    ### TODO for the moment we do not manage boolean expression
-    ### TODO manage builtins such as "when(event)" or "after(x)"
-    ### This algorithm is not good ie ['setSpeed', '(refSpeed)']
-    ###########################################################################
-    def parse_event(self, event, tokens):
-        event.params = []
-        N = len(tokens)
-        if N == 0: # No event
-            event.name = ''
-            return
-        # Concat all tokens into a single one
-        if tokens[N-1][-1] != ')':
-            # The last token does not have params
-            event.name = tokens[0].lower()
-            for t in tokens[1:]:
-                event.name += t.capitalize()
-        else: # The last token has params
-            if N == 1:
-                splits = tokens[-1].split('(')
-                event.name = splits[0]
-                event.params = splits[1][:-1].split(',')
-            else:
-                event.name = tokens[0].lower()
-                for t in tokens[1:-1]:
-                    event.name += t.capitalize()
-                splits = tokens[N-1].split('(')
-                event.name += splits[0].capitalize()
-                event.params = splits[1][:-1].split(',')
-
-    ###########################################################################
     ### Check if the method name is not conflicting with a class method.
     ###########################################################################
     def check_valid_method_name(self, name):
@@ -1366,7 +1368,7 @@ class Parser(object):
         for i in range(3, len(self.tokens)):
             if self.tokens[i] == '#event':
                 N = int(self.tokens[i+1])
-                self.parse_event(tr.event, self.tokens[i+2:i+2+N])
+                tr.event.parse_event(self.tokens[i+2:i+2+N])
                 self.check_valid_method_name(tr.event.name)
                 # Make the main state machine broadcast external events to nested state machine
                 if self.fsm.parent != None:

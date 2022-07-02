@@ -57,10 +57,6 @@ the last section of this document.
   the generated state machine is functional you do not have to modify it but you
   may have to clean a little the code for your guards, actions, add member
   variables to complete the compilation.
-- In gestation: add optional data to events. In this
-  [project](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2)
-  they used them, I tried it but this way may reach some segfaults. So for the
-  moment I have not yet good solutions.
 
 ## Prerequisite
 
