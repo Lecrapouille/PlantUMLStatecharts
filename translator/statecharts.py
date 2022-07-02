@@ -1501,15 +1501,15 @@ class Parser(object):
 
     ###########################################################################
     ### Parse plantUML file parser and create a graph structure.
-    ### param[in] classname: postfix name for the state machine name.
+    ### param[in] postfix: postfix name for the state machine name.
     ###########################################################################
-    def parse_plantuml_file(self, umlfile, classname):
+    def parse_plantuml_file(self, umlfile, postfix):
         self.umlfile = umlfile
         # Create the main state machine
         self.machines.append(StateMachine())
         self.fsm = self.machines[-1]
         self.fsm.name = Path(self.umlfile).stem
-        self.fsm.class_name = self.fsm.name + classname
+        self.fsm.class_name = self.fsm.name + postfix
         self.fsm.enum_name = self.fsm.class_name + 'States'
         # Make the parser understand the plantUML grammar
         if self.parser == None:
@@ -1528,13 +1528,13 @@ class Parser(object):
     ### Entry point for translating a plantUML file into a C++ source file.
     ### param[in] umlfile: path to the plantuml file.
     ### param[in] cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
-    ### param[in] classname: postfix name for the state machine name.
+    ### param[in] postfix: postfix name for the state machine name.
     ###########################################################################
-    def translate(self, umlfile, cpp_or_hpp, classname):
+    def translate(self, umlfile, cpp_or_hpp, postfix):
         if not os.path.isfile(umlfile):
             print('File path ' + umlfile + ' does not exist. Exiting!')
             sys.exit(-1)
-        self.parse_plantuml_file(umlfile, classname)
+        self.parse_plantuml_file(umlfile, postfix)
         self.finalize_machine()
         self.generate_code(cpp_or_hpp)
 
@@ -1542,11 +1542,11 @@ class Parser(object):
 ### Display command line usage
 ###############################################################################
 def usage():
-    print('Command line: ' + sys.argv[0] + ' <plantuml file> cpp|hpp [state machine name]')
+    print('Command line: ' + sys.argv[0] + ' <plantuml file> cpp|hpp [postfix]')
     print('Where:')
     print('   <plantuml file>: the path of a plantuml statechart')
     print('   "cpp" or "hpp": to choose between generating a C++ source file or a C++ header file')
-    print('   [state machine name]: is an optional name to postfix the name of the state machine class')
+    print('   [postfix]: is an optional postfix to extend the name of the state machine class')
     print('Example:')
     print('   sys.argv[1] foo.plantuml cpp Bar')
     print('Will create a FooBar.cpp file with a state machine name FooBar')
