@@ -27,9 +27,10 @@ note: "note" side "of" STATE "\n" /.+/ "\n" "end" "note" "\n"
 ?side: "left" -> left | "right" -> right
 
 // UML statecharts entry/leaving actions. I added alternative names
-?state_action: state_entry | state_exit | state_event | state_comment
+?state_action: state_entry | state_exit | state_event | state_comment | state_activity
 state_entry: STATE ":" ("entry" | "entering") action "\n"
 state_exit: STATE ":" ("exit" | "leaving") action "\n"
+state_activity: STATE ":" ("do" | "activity") action "\n"
 
 // Internal event
 state_event: STATE ":" ("on" | "event") event guard? action? "\n"
