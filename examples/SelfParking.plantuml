@@ -4,13 +4,13 @@ hide empty description
 
 [*] --> IDLE
 
-IDLE --> SCAN_PARKING_SPOTS : turning indicator [ !isParked() ]\n--\nm_fsm_scan.reset()
+IDLE --> SCAN_PARKING_SPOTS : turning indicator [ !isParked() ]\n--\nm_fsm_scan.enter()
 IDLE --> COMPUTE_LEAVING_TRAJECTORY : turning indicator [ isParked() ]
 
-SCAN_PARKING_SPOTS --> COMPUTE_ENTERING_TRAJECTORY : [ m_fsm_scan.status() == TODO::Status::PARKING_SLOT_FOUND ]
-SCAN_PARKING_SPOTS --> TRAJECTORY_DONE : [ m_fsm_scan.status() == TODO::Status::PARKING_SLOT_NOT_FOUND ]
+SCAN_PARKING_SPOTS --> COMPUTE_ENTERING_TRAJECTORY : [ m_fsm_scan.status() == Scanner::Status::PARKING_SLOT_FOUND ]
+SCAN_PARKING_SPOTS --> TRAJECTORY_DONE : [ m_fsm_scan.status() == Scanner::Status::PARKING_SLOT_NOT_FOUND ]
 SCAN_PARKING_SPOTS --> SCAN_PARKING_SPOTS
-' : [ m_fsm_scan.status() == TODO::Status::PARKING_SEARCHING ]
+' : [ m_fsm_scan.status() == Scanner::Status::PARKING_SEARCHING ]
 SCAN_PARKING_SPOTS : on update / m_fsm_scan.update(dt)
 
 COMPUTE_ENTERING_TRAJECTORY --> DRIVE_ALONG_TRAJECTORY: [ hasTrajectory() ]
@@ -20,49 +20,86 @@ COMPUTE_ENTERING_TRAJECTORY : entering / computeTrajectoryEnteringSlot()
 COMPUTE_LEAVING_TRAJECTORY --> TRAJECTORY_DONE : [ !hasTrajectory() ]
 COMPUTE_LEAVING_TRAJECTORY : entering / computeTrajectoryLeavingSlot()
 
-DRIVE_ALONG_TRAJECTORY --> TRAJECTORY_DONE : [ !canDrive() ]
+DRIVE_ALONG_TRAJECTORY --> TRAJECTORY_DONE : [ !canDrive(dt) ]
 DRIVE_ALONG_TRAJECTORY : on update / driveAlongTrajectory()
 
 TRAJECTORY_DONE --> IDLE
-TRAJECTORY_DONE : entering / m_car.setRefSpeed(0.0f)
-TRAJECTORY_DONE : entering / m_car.turning_indicator(false, false)
+TRAJECTORY_DONE : entering / m_ego.setRefSpeed(0.0f)
+TRAJECTORY_DONE : entering / m_ego.turning_indicator(false, false)
 
 COMPUTE_ENTERING_TRAJECTORY --> TRAJECTORY_DONE : [ !hasTrajectory() ]
 
 COMPUTE_LEAVING_TRAJECTORY --> DRIVE_ALONG_TRAJECTORY: [ hasTrajectory() ]
 
-'header #  include "Vehicle/Vehicle.hpp"
-'code private:
-'code
-'code     inline bool isParked() const
-'code     {
-'code         return false; // FIXME: not yet implemented
-'code     }
-'code
-'code     inline bool hasTrajectory() const
-'code     {
-'code         return m_car.hasTrajectory();
-'code     }
-'code
-'code     inline bool canDrive(float const dt) const
-'code     {
-'code         return m_car.updateTrajectory(dt);
-'code     }
-'code
-'code     inline void computeTrajectoryEnteringSlot()
-'code     {
-'code         /*return */ m_car.park(m_parking, true);
-'code     }
-'code
-'code     inline void computeTrajectoryLeavingSlot()
-'code     {
-'code         /*return */ m_car.park(m_parking, false);
-'code     }
-'code
-'code private:
-'code
-'code     SelfParkingCar& m_car;
-'code     Parking m_parking;
-'code     m_fsm_scan;
+'[header] struct Parking {};
+'[header] class Scanner // StateMachine
+'[header] {
+'[header] public:
+'[header]    enum class Status { PARKING_SLOT_FOUND, PARKING_SLOT_NOT_FOUND, PARKING_SEARCHING };
+'[header]    Status status() const { return m_status; }
+'[header]    void update(float dt) { m_status = Status::PARKING_SLOT_FOUND; }
+'[header]    void enter() {}
+'[header] private:
+'[header]    Status m_status = Status::PARKING_SLOT_NOT_FOUND;
+'[header] };
+'[header] class Vehicle
+'[header] {
+'[header] public:
+'[header]     inline bool isParked() const { return false; } // FIXME: not yet implemented
+'[header]     inline bool hasTrajectory() const { return true; }
+'[header]     inline bool canDrive(float const dt) const { return true; }
+'[header]     inline void park(Parking& parking, bool entering) {}
+'[header]     inline bool canPark() const { return true; }
+'[header]     inline void setRefSpeed(float) {}
+'[header]     inline void turning_indicator(bool, bool) {}
+'[header]     inline bool updateTrajectory(float) { return true; }
+'[header] };
+
+'[param] Vehicle& ego
+'[cons] m_ego(ego)
+
+'[code] private:
+'[code]
+'[code]     inline bool isParked() const
+'[code]     {
+'[code]         return false; // FIXME: not yet implemented
+'[code]     }
+'[code]
+'[code]     inline bool hasTrajectory() const
+'[code]     {
+'[code]         return m_ego.hasTrajectory();
+'[code]     }
+'[code]
+'[code]     inline bool canDrive(float const dt_) const
+'[code]     {
+'[code]         return m_ego.updateTrajectory(dt_);
+'[code]     }
+'[code]
+'[code]     inline void computeTrajectoryEnteringSlot()
+'[code]     {
+'[code]         /*return */ m_ego.park(m_parking, true);
+'[code]     }
+'[code]
+'[code]     inline void computeTrajectoryLeavingSlot()
+'[code]     {
+'[code]         /*return */ m_ego.park(m_parking, false);
+'[code]     }
+'[code]
+'[code]     inline bool canPark() const
+'[code]     {
+'[code]         return m_ego.canPark();
+'[code]     }
+'[code]
+'[code]     void driveAlongTrajectory() {}
+'[code]
+'[code] private:
+'[code]
+'[code]     Vehicle& m_ego;
+'[code]     Parking m_parking;
+'[code]     Scanner m_fsm_scan;
+'[code]     float dt; // FIXME: how to update ?
+
+'[test] MockSelfParkingController() : SelfParkingController(m_ego) {}
+'[test] Vehicle m_ego;
 
 @enduml

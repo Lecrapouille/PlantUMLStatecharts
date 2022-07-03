@@ -12,7 +12,7 @@ skin: ("skin" | "hide") FREE_TEXT "\n"
 // This rule does not come from PlantUML syntax but we absue of the single-line comment
 // to add extra command for generating C++ code.
 cpp_code: "'" CPP_WHAT FREE_TEXT "\n"
-CPP_WHAT: "[header]" | "[footer]" | "[param]" | "[init]" | "[code]" | "[test]"
+CPP_WHAT: "[header]" | "[footer]" | "[param]" | "[cons]" | "[init]" | "[code]" | "[test]"
 
 // PlantUML single-line comment
 comment: "'" FREE_TEXT "\n"

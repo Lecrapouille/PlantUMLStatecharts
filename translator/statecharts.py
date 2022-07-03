@@ -202,6 +202,7 @@ class ExtraCode(object):
         self.footer = ''
         # Arguments to the state machine class constructor method.
         self.argvs = ''
+        self.cons = ''
         # Code to be placed inside the class constructor method and the reset
         # method.
         self.init = ''
@@ -629,7 +630,8 @@ class Parser(object):
                                      'state and call it actions.')
         self.indent(1)
         self.fd.write(self.fsm.class_name + '(' + self.fsm.extra_code.argvs + ')\n')
-        self.indent(2), self.fd.write(': StateMachine(' + self.state_enum(self.fsm.initial_state) + ')\n')
+        self.indent(2), self.fd.write(': StateMachine(' + self.state_enum(self.fsm.initial_state) + ')')
+        self.fd.write(self.fsm.extra_code.cons), self.fd.write('\n')
         self.indent(1), self.fd.write('{\n')
         self.indent(2), self.fd.write('// Init actions on states\n')
         self.generate_table_of_states()
@@ -644,7 +646,7 @@ class Parser(object):
         self.fd.write('#if defined(MOCKABLE)\n')
         self.generate_method_comment('Needed because of virtual methods.')
         self.indent(1)
-        self.fd.write('virtual ~' + self.fsm.class_name + '(' + self.fsm.extra_code.argvs + ') = default;\n')
+        self.fd.write('virtual ~' + self.fsm.class_name + '() = default;\n')
         self.fd.write('#endif\n\n')
 
     ###########################################################################
@@ -1482,6 +1484,9 @@ class Parser(object):
             if self.fsm.extra_code.argvs != '':
                 self.fsm.extra_code.argvs += ', '
             self.fsm.extra_code.argvs += code
+        elif token == '[cons]':
+            self.fsm.extra_code.cons += ', \n          '
+            self.fsm.extra_code.cons += code
         elif token == '[init]':
             self.fsm.extra_code.init += '        '
             self.fsm.extra_code.init += code
