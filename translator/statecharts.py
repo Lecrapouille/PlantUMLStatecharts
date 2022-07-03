@@ -18,6 +18,9 @@
 ## You should have received a copy of the GNU General Public License
 ## along with this program.  If not, see http://www.gnu.org/licenses/.
 ###############################################################################
+## Note: in this document the term state machine, FSM, HSM or statecharts are
+## equivalent.
+###############################################################################
 
 from pathlib import Path
 from collections import defaultdict
@@ -29,7 +32,7 @@ import sys, os, re, itertools
 import networkx as nx
 
 ###############################################################################
-### Console color for print
+### Console color for print.
 ###############################################################################
 class bcolors:
     HEADER = '\033[95m'
@@ -54,17 +57,20 @@ class bcolors:
 ###############################################################################
 class Event(object):
     def __init__(self):
-        # Unique name of the event.
+        # Name of the event (C++ function name without arguments and return).
         self.name = ''
-        # List of optional arguments (data to the event).
+        # List of optional arguments (C++ argument name, no typage).
         self.params = []
 
     ###########################################################################
-    ### Parse an event.
-    ### TODO for the moment we do not manage boolean expression
-    ### TODO manage builtins such as "when(event)" or "after(x)"
+    ### Parse an event and fill the fields of the instance.
+    ### param[in] tokens list of tokens from the AST. For example:
+    ###   ['foo', 'bar(x, y)']
+    ### Will set:
+    ###   .name = 'fooBar'
+    ###   .params = ['x', 'y']
     ###########################################################################
-    def parse_event(self, tokens):
+    def parse(self, tokens):
         self.params = []
         N = len(tokens)
         if N == 0: # No event
@@ -87,7 +93,8 @@ class Event(object):
                 self.name += tokens[i].capitalize()
 
     ###########################################################################
-    ### Generate the definition of the C++ method.
+    ### Generate the definition of the C++ method. For example returns:
+    ###   void fooBar(X const& x, Y const& y)
     ###########################################################################
     def header(self):
         params = ''
@@ -99,26 +106,20 @@ class Event(object):
 
     ###########################################################################
     ### Generate the call of the C++ method.
+    ### param[in] var optinal variable name passed to the function.
+    ### For example returns:
+    ###   fooBar(var.x, var.y)
+    ### Or:
+    ###   fooBar(x, y)
     ###########################################################################
-    def caller(self, subject=''):
-        s = '' if subject == '' else subject + '.'
+    def caller(self, var=''):
+        s = '' if var == '' else var + '.'
         params = ''
         for p in self.params:
             if params != '':
                 params += ', '
             params += s + p
         return self.name + '(' + params + ')'
-
-    ###########################################################################
-    ###
-    ###########################################################################
-    def brodcast(self):
-        params = ''
-        for p in self.params:
-            if params != '':
-                params += ', ' + p
-            params += p.lower()
-        return self.name + '(' + params + ');'
 
     def __hash__(self):
         return hash(self.name)
@@ -134,7 +135,8 @@ class Event(object):
 
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML transition.
-### Example of PlantUML transition:
+### PlantUML transitions are stored as attributes for graph edges.
+### PlantUML transition syntax:
 ###    source -> destination : event [ guard ] / action
 ###############################################################################
 class Transition(object):
@@ -160,18 +162,20 @@ class Transition(object):
 
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML state.
-### Example of PlantUML state:
+### PlantUML states are stored as attributes for graph nodes.
+### PlantUML state syntax:
 ###     state : entry / action
 ###     state : exit / action
 ###     state : do / activity
-###     state : on event [ guard ] / action (note this case will be converted
-### into a graph edge instead of graph node).
+###     state : on event [ guard ] / action.
+### Note that 'on event' will be converted to an edge instead of a graph node.
 ###############################################################################
 class State(object):
     def __init__(self, name):
-        # PlantUML state (raw name + upper case, i.e. '[*]' or 'STATE1').
+        # PlantUML name (raw name + upper case, i.e. '[*]' or 'STATE1').
+        # The C++ name for [*] shall be converted.
         self.name = name
-        # Optional C++ comment.
+        # Optional C++ comment placed with enums.
         self.comment = ''
         # Action to perform when entering the state (C++ code).
         self.entering = ''
@@ -179,22 +183,23 @@ class State(object):
         self.leaving = ''
         # State activity (FIXME to be defined).
         self.activity = ''
-        # Internal transition when no events are explicitely set.
+        # Internal transition when events are not present on transitions.
         self.internal = ''
-        # Expected number of times the mock is called.
+        # Expected number of times the mock of entry action is called.
         self.count_entering = 0
-        # Expected number of times the mock is called.
+        # Expected number of times the mock of exit action is called.
         self.count_leaving = 0
 
     def __str__(self):
         return self.name + '(entering: ' + self.entering + ') (exit:' + self.leaving + ')'
 
 ###############################################################################
-### Structure holding extra C++ code to be merged within the generated code.
+### Structure holding extra lines of C++ code. These lines will be merged in
+### the generated code at predefined location.
 ###############################################################################
 class ExtraCode(object):
     def __init__(self):
-        # Main comment
+        # Main comment for the state machine class.
         self.brief = ''
         # Code to be placed on the header of the generated code (before the
         # state machine class definition).
@@ -204,18 +209,21 @@ class ExtraCode(object):
         self.footer = ''
         # Arguments to the state machine class constructor method.
         self.argvs = ''
+        # Constructor init inside its ':' list.
         self.cons = ''
         # Code to be placed inside the class constructor method and the reset
         # method.
         self.init = ''
         # Code to be placed inside the state machine class to define extra
-        # member functions and extra member variables.
-        self.functions = ''
-        # Code to be placed inside the unit tests file to prepare tests.
+        # member functions (with or with code) or extra member variables.
+        self.code = ''
+        # Code to be placed inside the mock class for unit tests.
         self.unit_tests = ''
 
 ###############################################################################
-### Structure holding context of a state machine
+### Structure holding context of a state machine after having parsed a PlantUML
+### composite state (nested state machine) or after having parsed a PlantUML
+### file (main state machine).
 ###############################################################################
 class StateMachine(object):
     def __init__(self):
@@ -248,7 +256,7 @@ class StateMachine(object):
         self.extra_code = ExtraCode()
         # C++ warnings inside the generated file when missformed state
         # machine is detected.
-        self.warnings = ''
+        self.warnings = []
 
     def __str__(self):
         return self.name
@@ -326,6 +334,101 @@ class StateMachine(object):
                 all_paths.append(path)
          return all_paths
 
+    ###########################################################################
+    ### The main state machine shall have an initial state [*].
+    ### Nested state mzchine may not start by [*] but shall have at least one
+    ### entering transistion (sink source).
+    ###########################################################################
+    def verify_initial_state(self):
+        # Main state machine
+        if self.parent == None:
+            if self.initial_state == '':
+                self.warning('Missing initial state in the main state machine')
+            return
+        # FIXME
+        # Nested state machine. FIXME missing degree >= 1 mais dont la source != self
+        #source_nodes = [node for node, indegree in self.graph.in_degree(self.graph.nodes()) if indegree == 0]
+        #if source_nodes == []:
+        #    self.warning('Missing initial state in the nested state machine')
+
+    ###########################################################################
+    ### Count the total number of events which shall be > 1
+    ###########################################################################
+    def verify_number_of_events(self):
+        for e in self.lookup_events:
+            if e.name != '':
+                return
+        self.warning('The state machine shall have at least one event.')
+
+    ###########################################################################
+    ### Check if the state machine does not have infinite loops (meaning a
+    ### cycle in the graph where all transitions do not have events).
+    ###########################################################################
+    def verify_infinite_loops(self):
+        for cycle in self.graph_cycles():
+            find = True
+            # A cyle of size 1 means internal transition by an event.
+            if len(cycle) == 1:
+                find = False
+                continue
+            # Check if there is at least one event along the cycle path.
+            for i in range(len(cycle) - 1):
+                if self.graph[cycle[i]][cycle[i+1]]['data'].event.name != '':
+                    find = False
+                    break
+            # Add the warning in the generated code.
+            if find == True:
+                str = ' '.join(cycle) + ' '
+                self.warning('The state machine has an infinite loop: ' + str + '. Add an event!')
+                return
+
+    ###########################################################################
+    ### Verify for each state if transitions are determinist.
+    ### Case 1: each state having more than 1 transition in where one transition
+    ###         does not have event and guard.
+    ### Case 2: several transitions and guards does not check all cases (for
+    ###         example the Richman case with init quarters < 0.
+    ###########################################################################
+    def verify_transitions(self):
+        # Case 1
+        for state in list(self.graph.nodes()):
+            out = list(self.graph.neighbors(state))
+            if len(out) <= 1:
+                continue
+            for d in out:
+                tr = self.graph[state][d]['data']
+                if (tr.event.name == '') and (tr.guard == ''):
+                    self.warning('The state ' + state + ' has an issue with its transitions: it has' +
+                                 ' several possible ways while the way to state ' + d +
+                                 ' is always true and therefore will be always a candidate and transition' +
+                                 ' to other states is non determinist.')
+        # Case 2: TODO
+
+    ###########################################################################
+    ### Entry point to check if the state machine is well formed (determinist).
+    ### Do not exit the program or throw exception, just display warning on the
+    ### console.
+    ### TODO for each node: are transitions to output neighbors mutually exclusive ?
+    ### TODO Are all states reachable ?
+    ### TODO how to parse guards to do formal prooves ? Can formal proove be
+    ### used in a networkx graph ?
+    ###########################################################################
+    def is_determinist(self):
+        self.verify_initial_state()
+        self.verify_number_of_events()
+        self.verify_transitions()
+        self.verify_infinite_loops()
+        pass
+
+    ###########################################################################
+    ### Print a warning message on the console.
+    ### param[in] msg the message to print.
+    ###########################################################################
+    def warning(self, msg):
+        self.warnings.append(msg)
+        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.name \
+              + ": "  + msg + f"{bcolors.ENDC}")
+
 ###############################################################################
 ### Context of the parser translating a PlantUML file depicting a state machine
 ### into a C++ file state machine holding some unit tests.
@@ -342,14 +445,15 @@ class Parser(object):
         # File descriptor of the opened file (plantUML, generated files).
         self.fd = None
         # Name of the plantUML file (input of the tool).
-        self.umlfile = ''
-        # Dictionnary of StateMachine
-        self.machines = dict() # StateMachine()
-        # Current FSM (used as side effect instead of passing the current FSM
-        # as argument to functions. Ok maybe consider as dirty!)
-        self.fsm = StateMachine()
-        # Name of the master state machine (self.machines[self.main_fsm])
-        self.main_fsm = ''
+        self.uml_file = ''
+        # Currently active state machine (used as side effect instead of
+        # passing the current FSM as argument to functions. Ok maybe consider
+        # as dirty but doing like this in OpenGL)
+        self.current = StateMachine()
+        # Master state machine (entry point).
+        self.master = StateMachine()
+        # Dictionnary of all state machines (master and nested).
+        self.machines = dict() # type: StateMachine()
 
     ###########################################################################
     ### Is the generated file should be a C++ source file or header file ?
@@ -361,20 +465,11 @@ class Parser(object):
         return True if extension in ['.h', '.hpp', '.hh', '.hxx'] else False
 
     ###########################################################################
-    ### Print a warning message on the console.
-    ### param[in] msg the message to print.
-    ###########################################################################
-    def warning(self, msg):
-        self.fsm.warnings += msg
-        print(f"{bcolors.WARNING}   WARNING in the state machine " + self.fsm.name \
-              + ": "  + msg + f"{bcolors.ENDC}")
-
-    ###########################################################################
     ### Print a general error message on the console and exit the application.
     ### param[in] msg the message to print.
     ###########################################################################
     def fatal(self, msg):
-        print(f"{bcolors.FAIL}   FATAL in the state machine " + self.fsm.name + \
+        print(f"{bcolors.FAIL}   FATAL in the state machine " + self.current.name + \
               ": " + msg + f"{bcolors.ENDC}")
         sys.exit(-1)
 
@@ -444,48 +539,48 @@ class Parser(object):
     def generate_common_header(self):
         self.fd.write('// This file as been generated the ')
         self.fd.write(date.today().strftime("%B %d, %Y"))
-        self.fd.write(' from the PlantUML statechart ' + self.umlfile)
+        self.fd.write(' from the PlantUML statechart ' + self.uml_file)
         self.fd.write('\n// This code generation is still experimental. Some '
                       'border cases may not be correctly managed!\n\n')
 
     ###########################################################################
-    ### Code generator: add the header file.
+    ### Code generator: generate the header of the file.
     ### param[in] hpp set to True if generated file is a C++ header file.
     ###########################################################################
     def generate_header(self, hpp):
         indent = 1 if hpp else 0
         self.generate_common_header()
         if hpp:
-            self.fd.write('#ifndef ' + self.fsm.class_name.upper() + '_HPP\n')
-            self.fd.write('#  define ' + self.fsm.class_name.upper() + '_HPP\n\n')
-        for sm in self.fsm.children:
+            self.fd.write('#ifndef ' + self.current.class_name.upper() + '_HPP\n')
+            self.fd.write('#  define ' + self.current.class_name.upper() + '_HPP\n\n')
+        for sm in self.current.children:
             self.generate_include(indent, '"', sm.class_name + '.hpp', '"')
-        if len(self.fsm.children) == 0:
+        if len(self.current.children) == 0:
             self.generate_include(indent, '"', 'StateMachine.hpp', '"')
-        self.fd.write(self.fsm.extra_code.header)
+        for w in self.current.warnings:
+            self.fd.write('\n#warning "' + w + '"\n')
+        self.fd.write(self.current.extra_code.header)
         self.fd.write('\n')
 
     ###########################################################################
-    ### Code generator: add the footer file.
+    ### Code generator: generate the footer of the file.
     ### param[in] hpp set to True if generated file is a C++ header file.
     ###########################################################################
     def generate_footer(self, hpp):
-        if self.fsm.warnings != '':
-            self.fd.write('\n#warning "' + self.fsm.warnings + '"\n')
-        self.fd.write(self.fsm.extra_code.footer)
+        self.fd.write(self.current.extra_code.footer)
         if hpp:
-            self.fd.write('#endif // ' + self.fsm.class_name.upper() + '_HPP')
+            self.fd.write('#endif // ' + self.current.class_name.upper() + '_HPP')
 
     ###########################################################################
-    ### Code generator: add the enum of the states of the state machine.
+    ### Code generator: generate the states for the state machine as enums.
     ###########################################################################
     def generate_state_enums(self):
         self.generate_function_comment('States of the state machine.')
-        self.fd.write('enum class ' + self.fsm.enum_name + '\n{\n')
+        self.fd.write('enum class ' + self.current.enum_name + '\n{\n')
         self.indent(1), self.fd.write('// Client states:\n')
-        for state in list(self.fsm.graph.nodes):
+        for state in list(self.current.graph.nodes):
             self.indent(1), self.fd.write(self.state_name(state) + ',')
-            comment = self.fsm.graph.nodes[state]['data'].comment
+            comment = self.current.graph.nodes[state]['data'].comment
             if comment != '':
                 self.fd.write(' //!< ' + comment)
             self.fd.write('\n')
@@ -494,21 +589,21 @@ class Parser(object):
         self.fd.write('};\n\n')
 
     ###########################################################################
-    ### Code generator: add the function that stringify states.
+    ### Code generator: generate the function that stringify states.
     ###########################################################################
     def generate_stringify_function(self):
         self.generate_function_comment('Convert enum states to human readable string.')
-        self.fd.write('static inline const char* stringify(' + self.fsm.enum_name + \
+        self.fd.write('static inline const char* stringify(' + self.current.enum_name + \
                       ' const state)\n{\n')
         self.indent(1), self.fd.write('static const char* s_states[] =\n')
         self.indent(1), self.fd.write('{\n')
-        for state in list(self.fsm.graph.nodes):
+        for state in list(self.current.graph.nodes):
             self.indent(2), self.fd.write('[int(' + self.state_enum(state) + ')] = "' + state + '",\n')
         self.indent(1), self.fd.write('};\n\n')
         self.indent(1), self.fd.write('return s_states[int(state)];\n};\n\n')
 
     ###########################################################################
-    ### Convert the state name (PlantUML name to C++ name)
+    ### Convert the state name (raw PlantUML name to C++ name)
     ### param[in] state the PlantUML name of the state.
     ### return the C++ name.
     ###########################################################################
@@ -524,7 +619,7 @@ class Parser(object):
     ### param[in] state the PlantUML name of the state.
     ###########################################################################
     def state_enum(self, state):
-        return self.fsm.enum_name + '::' + self.state_name(state)
+        return self.current.enum_name + '::' + self.state_name(state)
 
     ###########################################################################
     ### Return the C++ method for transition guards.
@@ -533,7 +628,7 @@ class Parser(object):
     ### param[in] class_name if True prepend the class name.
     ###########################################################################
     def guard_function(self, source, destination, class_name=False):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onGuarding_' + self.state_name(source) + '_' + self.state_name(destination)
 
     ###########################################################################
@@ -543,7 +638,7 @@ class Parser(object):
     ### param[in] class_name if True prepend the class name.
     ###########################################################################
     def transition_function(self, source, destination, class_name=False):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onTransitioning_' + self.state_name(source) + '_' + self.state_name(destination)
 
     ###########################################################################
@@ -552,7 +647,7 @@ class Parser(object):
     ### param[in] entering if True for entering actions else for leaving action.
     ###########################################################################
     def state_entering_function(self, state, class_name=True):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onEntering_' + self.state_name(state)
 
     ###########################################################################
@@ -561,7 +656,7 @@ class Parser(object):
     ### param[in] entering if True for entering actions else for leaving action.
     ###########################################################################
     def state_leaving_function(self, state, class_name=True):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onLeaving_' + self.state_name(state)
 
     ###########################################################################
@@ -570,7 +665,7 @@ class Parser(object):
     ### param[in] entering if True for entering actions else for leaving action.
     ###########################################################################
     def state_internal_function(self, state, class_name=True):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onInternal_' + self.state_name(state)
 
     ###########################################################################
@@ -579,7 +674,7 @@ class Parser(object):
     ### param[in] entering if True for entering actions else for leaving action.
     ###########################################################################
     def state_activity_function(self, state, class_name=True):
-        s = self.fsm.class_name + '::' if class_name else ''
+        s = self.current.class_name + '::' if class_name else ''
         return s + 'onActivity_' + self.state_name(state)
 
     ###########################################################################
@@ -587,7 +682,7 @@ class Parser(object):
     ### param[in] fsm the nested state machine.
     ###########################################################################
     def child_machine_instance(self, fsm):
-        return 'm_' + fsm.name.lower() + 'sub'
+        return 'm_nested_' + fsm.name.lower()
 
     ###########################################################################
     ### Generate the table of states holding their entering or leaving actions.
@@ -595,8 +690,8 @@ class Parser(object):
     ### the table is not generated.
     ###########################################################################
     def generate_table_of_states(self):
-        for state in list(self.fsm.graph.nodes):
-            s = self.fsm.graph.nodes[state]['data']
+        for state in list(self.current.graph.nodes):
+            s = self.current.graph.nodes[state]['data']
             # Nothing to do with initial state
             if (s.name == '[*]'):
                 continue
@@ -631,14 +726,14 @@ class Parser(object):
         self.generate_method_comment('Default constructor. Start from initial '
                                      'state and call it actions.')
         self.indent(1)
-        self.fd.write(self.fsm.class_name + '(' + self.fsm.extra_code.argvs + ')\n')
-        self.indent(2), self.fd.write(': StateMachine(' + self.state_enum(self.fsm.initial_state) + ')')
-        self.fd.write(self.fsm.extra_code.cons), self.fd.write('\n')
+        self.fd.write(self.current.class_name + '(' + self.current.extra_code.argvs + ')\n')
+        self.indent(2), self.fd.write(': StateMachine(' + self.state_enum(self.current.initial_state) + ')')
+        self.fd.write(self.current.extra_code.cons), self.fd.write('\n')
         self.indent(1), self.fd.write('{\n')
         self.indent(2), self.fd.write('// Init actions on states\n')
         self.generate_table_of_states()
         self.fd.write('\n'), self.indent(2), self.fd.write('// Init user code\n')
-        self.fd.write(self.fsm.extra_code.init)
+        self.fd.write(self.current.extra_code.init)
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -648,7 +743,7 @@ class Parser(object):
         self.fd.write('#if defined(MOCKABLE)\n')
         self.generate_method_comment('Needed because of virtual methods.')
         self.indent(1)
-        self.fd.write('virtual ~' + self.fsm.class_name + '() = default;\n')
+        self.fd.write('virtual ~' + self.current.class_name + '() = default;\n')
         self.fd.write('#endif\n\n')
 
     ###########################################################################
@@ -661,16 +756,16 @@ class Parser(object):
         # Init base class of the state machine
         self.indent(2), self.fd.write('StateMachine::enter();\n')
         # Init nested state machines
-        for sm in self.fsm.children:
+        for sm in self.current.children:
             self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
         # User's init code
-        if self.fsm.extra_code.init != '':
+        if self.current.extra_code.init != '':
             self.fd.write('\n'), self.indent(2), self.fd.write('// Init user code\n')
-            self.fd.write(self.fsm.extra_code.init)
+            self.fd.write(self.current.extra_code.init)
         # Initial internal transition
-        if self.fsm.graph.nodes['[*]']['data'].internal != '':
+        if self.current.graph.nodes['[*]']['data'].internal != '':
             self.fd.write('\n'), self.indent(2), self.fd.write('// Internal transition\n')
-            self.fd.write(self.fsm.graph.nodes['[*]']['data'].internal)
+            self.fd.write(self.current.graph.nodes['[*]']['data'].internal)
         self.indent(1), self.fd.write('}\n\n')
 
     ###########################################################################
@@ -683,7 +778,7 @@ class Parser(object):
         # Init base class of the state machine
         self.indent(2), self.fd.write('StateMachine::exit();\n')
         # Init nested state machines
-        for sm in self.fsm.children:
+        for sm in self.current.children:
             self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
         self.indent(1), self.fd.write('}\n\n')
 
@@ -692,28 +787,28 @@ class Parser(object):
 #FIXME
 # Manage the case of the transition goes or leaves a composite state
 #            if len(self.machines[origin].children) != 0:
-#                for sm in self.fsm.children:
+#                for sm in self.current.children:
 #                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.exit();\n')
 #            elif len(self.machines[destination].children) != 0:
-#                for sm in self.fsm.children:
+#                for sm in self.current.children:
 #                    self.indent(2), self.fd.write(self.child_machine_instance(sm) + '.enter();\n')
 #            # Generate the table of transitions
     ###########################################################################
     def generate_event_methods(self):
         # Broadcasr external events to nested state machine
-        for (sm, e) in self.fsm.broadcasts:
+        for (sm, e) in self.current.broadcasts:
             self.generate_method_comment('Broadcast external event.')
             self.indent(1), self.fd.write('inline '), self.fd.write(e.header())
-            self.fd.write(' { m_' + sm.lower() + 'sub.' + e.brodcast() + ' }\n\n')
+            self.fd.write(' { ' + self.child_machine_instance(self.current) + '.' + e.caller() + ' }\n\n')
         # React to external events
-        for event, arcs in self.fsm.lookup_events.items():
+        for event, arcs in self.current.lookup_events.items():
             if event.name == '':
                 continue
             self.generate_method_comment('External event.')
             self.indent(1), self.fd.write(event.header() + '\n')
             self.indent(1), self.fd.write('{\n')
             # Display data event
-            self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][EVENT %s]')
+            self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][EVENT %s]')
             if len(event.params) != 0:
                 self.fd.write(' with params XXX') # FIXME a finir
             self.fd.write('\\n", __func__);\n\n')
@@ -725,7 +820,7 @@ class Parser(object):
             self.indent(2), self.fd.write('static const Transitions s_transitions =\n')
             self.indent(2), self.fd.write('{\n')
             for origin, destination in arcs:
-                tr = self.fsm.graph[origin][destination]['data']
+                tr = self.current.graph[origin][destination]['data']
                 self.indent(3), self.fd.write('{\n')
                 self.indent(4), self.fd.write(self.state_enum(origin) + ',\n')
                 self.indent(4), self.fd.write('{\n')
@@ -744,15 +839,15 @@ class Parser(object):
     ### Generate guards and actions on transitions.
     ###########################################################################
     def generate_transition_methods(self):
-        transitions = list(self.fsm.graph.edges)
+        transitions = list(self.current.graph.edges)
         for origin, destination in transitions:
-            tr = self.fsm.graph[origin][destination]['data']
+            tr = self.current.graph[origin][destination]['data']
             if tr.guard != '':
                 self.generate_method_comment('Guard the transition from state ' + origin  + ' to state ' + destination + '.')
                 self.indent(1), self.fd.write('MOCKABLE bool ' + self.guard_function(origin, destination) + '()\n')
                 self.indent(1), self.fd.write('{\n')
                 self.indent(2), self.fd.write('const bool guard = (' + tr.guard + ');\n')
-                self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][GUARD ' + origin + ' --> ' + destination + ': ' + tr.guard + '] result: %s\\n",\n')
                 self.indent(3), self.fd.write('(guard ? "true" : "false"));\n')
                 self.indent(2), self.fd.write('return guard;\n')
                 self.indent(1), self.fd.write('}\n\n')
@@ -760,7 +855,7 @@ class Parser(object):
                 self.generate_method_comment('Do the action when transitioning from state ' + origin + ' to state ' + destination + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.transition_function(origin, destination) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][TRANSITION ' + origin + ' --> ' + destination)
+                self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][TRANSITION ' + origin + ' --> ' + destination)
                 if tr.action[0:2] != '//':
                     self.fd.write(': ' + tr.action + ']\\n");\n')
                 else: # Cannot display action since contains comment + warnings
@@ -772,21 +867,21 @@ class Parser(object):
     ### Generate leaving and entering actions associated to states.
     ###########################################################################
     def generate_state_methods(self):
-        nodes = list(self.fsm.graph.nodes)
+        nodes = list(self.current.graph.nodes)
         for node in nodes:
-            state = self.fsm.graph.nodes[node]['data']
+            state = self.current.graph.nodes[node]['data']
             if state.entering != '':
                 self.generate_method_comment('Do the action when entering the state ' + state.name + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.state_entering_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][ENTERING STATE ' + state.name + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][ENTERING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.entering)
                 self.indent(1), self.fd.write('}\n\n')
             if state.leaving != '':
                 self.generate_method_comment('Do the action when leaving the state ' + state.name + '.')
                 self.indent(1), self.fd.write('MOCKABLE void ' + self.state_leaving_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][LEAVING STATE ' + state.name + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][LEAVING STATE ' + state.name + ']\\n");\n')
                 self.fd.write(state.leaving)
                 self.indent(1), self.fd.write('}\n\n')
             if state.internal != '':
@@ -796,7 +891,7 @@ class Parser(object):
                 self.generate_method_comment('Do the internal transition when leaving the state ' + state.name + '.')
                 self.indent(1), self.fd.write('void ' + self.state_internal_function(node, False) + '()\n')
                 self.indent(1), self.fd.write('{\n')
-                self.indent(2), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '][INTERNAL TRANSITION FROM STATE ' + node + ']\\n");\n')
+                self.indent(2), self.fd.write('LOGD("[' + self.current.class_name.upper() + '][INTERNAL TRANSITION FROM STATE ' + node + ']\\n");\n')
                 self.fd.write(state.internal)
                 self.indent(1), self.fd.write('}\n\n')
 
@@ -804,12 +899,12 @@ class Parser(object):
     ### Entry point to generate the whole state machine class and all its methods.
     ###########################################################################
     def generate_state_machine_class(self):
-        if self.fsm.extra_code.brief != '':
-            self.generate_function_comment(self.fsm.extra_code.brief)
+        if self.current.extra_code.brief != '':
+            self.generate_function_comment(self.current.extra_code.brief)
         else:
             self.generate_function_comment('State machine concrete implementation.')
-        self.fd.write('class ' + self.fsm.class_name + ' : public StateMachine<')
-        self.fd.write(self.fsm.class_name + ', ' + self.fsm.enum_name + '>\n')
+        self.fd.write('class ' + self.current.class_name + ' : public StateMachine<')
+        self.fd.write(self.current.class_name + ', ' + self.current.enum_name + '>\n')
         self.fd.write('{\n')
         self.fd.write('public: // Constructor and destructor\n\n')
         self.generate_constructor_method()
@@ -822,17 +917,17 @@ class Parser(object):
         self.generate_transition_methods()
         self.fd.write('private: // Actions on states\n\n')
         self.generate_state_methods()
-        self.fd.write('private: // Sub state machines\n\n')
-        for sm in self.fsm.children:
+        self.fd.write('private: // Nested state machines\n\n')
+        for sm in self.current.children:
             self.indent(1), self.fd.write(sm.class_name + ' ')
             self.fd.write(self.child_machine_instance(sm) + ';\n')
         self.fd.write('private: // Data events\n\n')
-        for event, arcs in self.fsm.lookup_events.items():
+        for event, arcs in self.current.lookup_events.items():
             for arg in event.params:
                 self.indent(1), self.fd.write('//! \\brief Data for event ' + event.name + '\n')
                 self.indent(1), self.fd.write(arg.upper() + ' ' + arg + ';\n')
         self.fd.write('\nprivate: // Client code\n\n')
-        self.fd.write(self.fsm.extra_code.functions)
+        self.fd.write(self.current.extra_code.code)
         self.fd.write('};\n\n')
 
     ###########################################################################
@@ -841,7 +936,7 @@ class Parser(object):
     def generate_unit_tests_header(self):
         self.generate_common_header()
         self.fd.write('#define MOCKABLE virtual\n')
-        self.fd.write('#include "' + self.fsm.class_name + '.hpp"\n')
+        self.fd.write('#include "' + self.current.class_name + '.hpp"\n')
         self.fd.write('#include <gmock/gmock.h>\n')
         self.fd.write('#include <gtest/gtest.h>\n')
         self.fd.write('#include <cstring>\n\n')
@@ -858,11 +953,11 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_mocked_class(self):
         self.generate_function_comment('Mocked state machine')
-        self.fd.write('class Mock' + self.fsm.class_name + ' : public ' + self.fsm.class_name)
+        self.fd.write('class Mock' + self.current.class_name + ' : public ' + self.current.class_name)
         self.fd.write('\n{\npublic:\n')
-        transitions = list(self.fsm.graph.edges)
+        transitions = list(self.current.graph.edges)
         for origin, destination in transitions:
-            tr = self.fsm.graph[origin][destination]['data']
+            tr = self.current.graph[origin][destination]['data']
             if tr.guard != '':
                 self.indent(1)
                 self.fd.write('MOCK_METHOD(bool, ')
@@ -873,8 +968,8 @@ class Parser(object):
                 self.fd.write('MOCK_METHOD(void, ')
                 self.fd.write(self.transition_function(origin, destination))
                 self.fd.write(', (), (override));\n')
-        for node in list(self.fsm.graph.nodes):
-            state = self.fsm.graph.nodes[node]['data']
+        for node in list(self.current.graph.nodes):
+            state = self.current.graph.nodes[node]['data']
             if state.entering != '':
                 self.indent(1)
                 self.fd.write('MOCK_METHOD(void, ')
@@ -885,12 +980,12 @@ class Parser(object):
                 self.fd.write('MOCK_METHOD(void, ')
                 self.fd.write(self.state_leaving_function(node, False))
                 self.fd.write(', (), (override));\n')
-        for event, arcs in self.fsm.lookup_events.items():
+        for event, arcs in self.current.lookup_events.items():
             for arg in event.params:
                 self.indent(1), self.fd.write('// Data for event ' + event.name + '\n')
                 self.indent(1), self.fd.write(arg.upper() + ' ' + arg + '{};\n')
-        self.fd.write(self.fsm.extra_code.unit_tests)
-        if self.fsm.extra_code.unit_tests != '':
+        self.fd.write(self.current.extra_code.unit_tests)
+        if self.current.extra_code.unit_tests != '':
             self.fd.write('\n')
         self.fd.write('};\n\n')
 
@@ -898,12 +993,12 @@ class Parser(object):
     ### Reset mock counters.
     ###########################################################################
     def reset_mock_counters(self):
-        for origin, destination in list(self.fsm.graph.edges):
-            tr = self.fsm.graph[origin][destination]['data']
+        for origin, destination in list(self.current.graph.edges):
+            tr = self.current.graph[origin][destination]['data']
             tr.count_guard = 0
             tr.count_action = 0
-        for node in list(self.fsm.graph.nodes):
-            state = self.fsm.graph.nodes[node]['data']
+        for node in list(self.current.graph.nodes):
+            state = self.current.graph.nodes[node]['data']
             state.count_entering = 0
             state.count_leaving = 0
 
@@ -913,13 +1008,13 @@ class Parser(object):
     def count_mocked_guards(self, cycle):
         self.reset_mock_counters()
         for i in range(len(cycle) - 1):
-            tr = self.fsm.graph[cycle[i]][cycle[i+1]]['data'];
+            tr = self.current.graph[cycle[i]][cycle[i+1]]['data'];
             if tr.guard != '':
                 tr.count_guard += 1
             if tr.action != '':
                 tr.count_action += 1
-            source = self.fsm.graph.nodes[cycle[i]]['data']
-            destination = self.fsm.graph.nodes[cycle[i+1]]['data']
+            source = self.current.graph.nodes[cycle[i]]['data']
+            destination = self.current.graph.nodes[cycle[i+1]]['data']
             if source.leaving != '' and source.name != destination.name:
                 source.count_leaving += 1
             if destination.entering != '' and source.name != destination.name:
@@ -936,9 +1031,9 @@ class Parser(object):
     ###########################################################################
     def generate_mocked_guards(self, cycle):
         self.count_mocked_guards(cycle)
-        transitions = list(self.fsm.graph.edges)
+        transitions = list(self.current.graph.edges)
         for origin, destination in transitions:
-            tr = self.fsm.graph[origin][destination]['data']
+            tr = self.current.graph[origin][destination]['data']
             if tr.guard != '':
                 self.indent(1)
                 self.fd.write('EXPECT_CALL(fsm, ')
@@ -959,9 +1054,9 @@ class Parser(object):
                     self.fd.write(' LOGD("' + self.cleaning_code(tr.action) + '\\n");')
                     self.fd.write(' }))')
                 self.fd.write(';\n')
-        nodes = list(self.fsm.graph.nodes)
+        nodes = list(self.current.graph.nodes)
         for node in nodes:
-            state = self.fsm.graph.nodes[node]['data']
+            state = self.current.graph.nodes[node]['data']
             if state.entering != '':
                 self.indent(1)
                 self.fd.write('EXPECT_CALL(fsm, ' + self.state_entering_function(node, False) + '())')
@@ -986,13 +1081,13 @@ class Parser(object):
     ###########################################################################
     def generate_mocked_actions(self, cycle):
         for i in range(len(cycle) - 1):
-            tr = self.fsm.graph[cycle[i]][cycle[i+1]]['data'];
+            tr = self.current.graph[cycle[i]][cycle[i+1]]['data'];
             if tr.guard != '':
                 tr.count_guard += 1
             if tr.action != '':
                 tr.count_action += 1
         for node in cycle:
-            state = self.fsm.graph.nodes[node]['data']
+            state = self.current.graph.nodes[node]['data']
             if state.entering != '':
                 state.count_entering += 1
             if state.leaving != '':
@@ -1003,11 +1098,11 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_check_initial_state(self):
         self.generate_line_separator(0, ' ', 80, '-')
-        self.fd.write('TEST(' + self.fsm.class_name + 'Tests, TestInitialSate)\n{\n')
+        self.fd.write('TEST(' + self.current.class_name + 'Tests, TestInitialSate)\n{\n')
         self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
         self.indent(1), self.fd.write('LOGD("Check initial state after constructor or reset.\\n");\n')
         self.indent(1), self.fd.write('LOGD("===============================================\\n");\n')
-        self.indent(1), self.fd.write(self.fsm.class_name + ' ' + 'fsm; // Not mocked !\n')
+        self.indent(1), self.fd.write(self.current.class_name + ' ' + 'fsm; // Not mocked !\n')
         self.indent(1), self.fd.write('fsm.enter();\n\n')
         self.generate_unit_tests_assertions_initial_state()
         self.fd.write('}\n\n')
@@ -1017,10 +1112,10 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_check_cycles(self):
         count = 0
-        cycles = self.fsm.graph_cycles()
+        cycles = self.current.graph_cycles()
         for cycle in cycles:
             self.generate_line_separator(0, ' ', 80, '-')
-            self.fd.write('TEST(' + self.fsm.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
+            self.fd.write('TEST(' + self.current.class_name + 'Tests, TestCycle' + str(count) + ')\n{\n')
             count += 1
             # Print the cycle
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
@@ -1031,10 +1126,10 @@ class Parser(object):
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.indent(1), self.fd.write('Mock' + self.fsm.class_name + ' ' + 'fsm;\n')
+            self.indent(1), self.fd.write('Mock' + self.current.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards(['[*]'] + cycle)
             self.fd.write('\n'), self.indent(1), self.fd.write('fsm.enter();\n')
-            guard = self.fsm.graph[self.fsm.initial_state][cycle[0]]['data'].guard
+            guard = self.current.graph[self.current.initial_state][cycle[0]]['data'].guard
             self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
             self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[0]) + ');\n')
             self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[0] + '");\n')
@@ -1043,29 +1138,29 @@ class Parser(object):
             for i in range(len(cycle) - 1):
 # FIXME
 #                # External event not leaving the current state
-#                if self.fsm.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
-#                    tr = self.fsm.graph[cycle[i]][cycle[i]]['data']
+#                if self.current.graph.has_edge(cycle[i], cycle[i]) and (cycle[i] != cycle[i+1]):
+#                    tr = self.current.graph[cycle[i]][cycle[i]]['data']
 #                    if tr.event.name != '':
-#                        self.indent(1), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + ']// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
+#                        self.indent(1), self.fd.write('LOGD("[' + self.current.class_name.upper() + ']// Event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' <--> ' + cycle[i] + '\\n");\n')
 #                        self.indent(1), self.fd.write('fsm.' + tr.event.caller('fsm') + ';')
 #                        if tr.guard != '':
 #                            self.fd.write(' // If ' + tr.guard)
 #                        self.fd.write('\n')
-#                        self.indent(1), self.fd.write('LOGD("[' + self.fsm.class_name.upper() + '] Current state: %s\\n", fsm.c_str());\n')
+#                        self.indent(1), self.fd.write('LOGD("[' + self.current.class_name.upper() + '] Current state: %s\\n", fsm.c_str());\n')
 #                        self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i]) + ');\n')
 #                        self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i] + '");\n')
 
                 # External event: print the name of the event + its guard
-                tr = self.fsm.graph[cycle[i]][cycle[i+1]]['data']
+                tr = self.current.graph[cycle[i]][cycle[i+1]]['data']
                 if tr.event.name != '':
                     self.fd.write('\n'), self.indent(1)
-                    self.fd.write('LOGD("\\n[' + self.fsm.class_name.upper() + '] Triggering event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
+                    self.fd.write('LOGD("\\n[' + self.current.class_name.upper() + '] Triggering event ' + tr.event.name + ' [' + tr.guard + ']: ' + cycle[i] + ' ==> ' + cycle[i + 1] + '\\n");\n')
                     self.indent(1), self.fd.write('fsm.' + tr.event.caller('fsm') + ';\n')
 
                 if (i == len(cycle) - 2):
                     # Cycle of non external evants => malformed state machine
                     # I think this case is not good
-                    if self.fsm.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
+                    if self.current.graph[cycle[i+1]][cycle[1]]['data'].event.name == '':
                         self.indent(1), self.fd.write('\n#warning "Malformed state machine: unreachable destination state"\n')
                     else:
                         # No explicit event => direct internal transition to the state if an explicit event can occures.
@@ -1075,7 +1170,7 @@ class Parser(object):
 
                 # No explicit event => direct internal transition to the state if an explicit event can occures.
                 # Else skip test for the destination state since we cannot test its internal state
-                elif self.fsm.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
+                elif self.current.graph[cycle[i+1]][cycle[i+2]]['data'].event.name != '':
                     self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(cycle[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + cycle[i+1] + '");\n')
@@ -1086,10 +1181,10 @@ class Parser(object):
     ###########################################################################
     def generate_unit_tests_pathes_to_sinks(self):
         count = 0
-        pathes = self.fsm.graph_all_paths_to_sinks()
+        pathes = self.current.graph_all_paths_to_sinks()
         for path in pathes:
             self.generate_line_separator(0, ' ', 80, '-')
-            self.fd.write('TEST(' + self.fsm.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
+            self.fd.write('TEST(' + self.current.class_name + 'Tests, TestPath' + str(count) + ')\n{\n')
             count += 1
             # Print the path
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
@@ -1100,23 +1195,23 @@ class Parser(object):
             self.indent(1), self.fd.write('LOGD("===========================================\\n");\n')
 
             # Reset the state machine and print the guard supposed to reach this state
-            self.indent(1), self.fd.write('Mock' + self.fsm.class_name + ' ' + 'fsm;\n')
+            self.indent(1), self.fd.write('Mock' + self.current.class_name + ' ' + 'fsm;\n')
             self.generate_mocked_guards(path)
             self.fd.write('\n'), self.indent(1), self.fd.write('fsm.enter();\n')
 
             # Iterate on all nodes of the path
             for i in range(len(path) - 1):
-                event = self.fsm.graph[path[i]][path[i+1]]['data'].event
+                event = self.current.graph[path[i]][path[i+1]]['data'].event
                 if event.name != '':
-                    guard = self.fsm.graph[path[i]][path[i+1]]['data'].guard
+                    guard = self.current.graph[path[i]][path[i+1]]['data'].guard
                     self.fd.write('\n'), self.indent(1)
-                    self.fd.write('LOGD("[' + self.fsm.class_name.upper() + ']\\nEvent ' + event.name + ' [' + guard + ']: ' + path[i] + ' ==> ' + path[i + 1] + '\\n");\n')
+                    self.fd.write('LOGD("[' + self.current.class_name.upper() + '] Event ' + event.name + ' [' + guard + ']: ' + path[i] + ' ==> ' + path[i + 1] + '\\n");\n')
                     self.fd.write('\n'), self.indent(1), self.fd.write('fsm.' + event.caller() + ';\n')
                 if (i == len(path) - 2):
                     self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
-                elif self.fsm.graph[path[i+1]][path[i+2]]['data'].event.name != '':
+                elif self.current.graph[path[i+1]][path[i+2]]['data'].event.name != '':
                     self.indent(1), self.fd.write('LOGD("[UNIT TEST] Current state: %s\\n", fsm.c_str());\n')
                     self.indent(1), self.fd.write('ASSERT_EQ(fsm.state(), ' + self.state_enum(path[i+1]) + ');\n')
                     self.indent(1), self.fd.write('ASSERT_STREQ(fsm.c_str(), "' + path[i+1] + '");\n')
@@ -1159,7 +1254,7 @@ class Parser(object):
     ### FIXME Cycles does not make all test case possible
     ###########################################################################
     def generate_unit_tests(self, cxxfile, files, separated):
-        filename = self.fsm.class_name + 'Tests.cpp'
+        filename = self.current.class_name + 'Tests.cpp'
         self.fd = open(os.path.join(os.path.dirname(cxxfile), filename), 'w')
         self.generate_unit_tests_header()
         self.generate_unit_tests_mocked_class()
@@ -1191,14 +1286,14 @@ class Parser(object):
     ###########################################################################
     def generate_code(self, cxxfile, separated):
         files = []
-        for self.fsm in self.machines.values():
-            f = self.fsm.class_name + 'Tests.cpp'
+        for self.current in self.machines.values():
+            f = self.current.class_name + 'Tests.cpp'
             files.append(f)
-            f = self.fsm.class_name + '.' +  cxxfile
+            f = self.current.class_name + '.' +  cxxfile
             self.generate_state_machine(f)
             self.generate_unit_tests(f, files, separated)
         if separated:
-            mainfile = self.machines[self.main_fsm].class_name + 'MainTests.cpp'
+            mainfile = self.master.class_name + 'MainTests.cpp'
             mainfile = os.path.join(os.path.dirname(cxxfile), mainfile)
             self.generate_unit_tests_main_file(mainfile, files)
 
@@ -1214,9 +1309,9 @@ class Parser(object):
         # Make unique the list of states that does not have event on their
         # output edges
         states = []
-        for state in list(self.fsm.graph.nodes()):
-            for dest in list(self.fsm.graph.neighbors(state)):
-                tr = self.fsm.graph[state][dest]['data']
+        for state in list(self.current.graph.nodes()):
+            for dest in list(self.current.graph.neighbors(state)):
+                tr = self.current.graph[state][dest]['data']
                 if (tr.event.name == '') and (state not in states):
                     states.append(state)
 
@@ -1224,8 +1319,8 @@ class Parser(object):
         for state in states:
             count = 0 # count number of ways
             code = ''
-            for dest in list(self.fsm.graph.neighbors(state)):
-                tr = self.fsm.graph[state][dest]['data']
+            for dest in list(self.current.graph.neighbors(state)):
+                tr = self.current.graph[state][dest]['data']
                 if tr.guard != '':
                     code += '        if (' + self.guard_function(state, dest) + '())\n'
                 elif tr.event.name == '': # Dummy event and dummy guard
@@ -1235,9 +1330,9 @@ class Parser(object):
                     elif count > 1:
                         code += '\n#warning "Undeterminist State machine detected switching from state ' + state + ' to state ' + dest + '"\n'
 
-                if tr.event.name == '': # and state != self.fsm.initial_state:
+                if tr.event.name == '': # and state != self.current.initial_state:
                     code += '        {\n'
-                    code += '            LOGD("[' + self.fsm.class_name.upper() + '][STATE ' + state +  '] Candidate for internal transitioning to state ' + dest + '\\n");\n'
+                    code += '            LOGD("[' + self.current.class_name.upper() + '][STATE ' + state +  '] Candidate for internal transitioning to state ' + dest + '\\n");\n'
                     code += '            static const Transition tr =\n'
                     code += '            {\n'
                     code += '                .destination = ' + self.state_enum(dest) + ',\n'
@@ -1248,93 +1343,7 @@ class Parser(object):
                     code += '            return ;\n'
                     code += '        }\n'
                     count += 1
-            self.fsm.graph.nodes[state]['data'].internal += code
-
-    ###########################################################################
-    ### The state machine shall have an initial state.
-    ###########################################################################
-    def verify_initial_state(self):
-        if self.fsm.initial_state == '':
-            self.fatal('Missing initial state')
-
-    ###########################################################################
-    ### Count the total number of events which shall be > 1
-    ###########################################################################
-    def verify_number_of_events(self):
-        for e in self.fsm.lookup_events:
-            if e.name != '':
-                return
-        self.warning('The state machine shall have at least one event.')
-
-    ###########################################################################
-    ### Check infinite loops
-    ###########################################################################
-    def verify_infinite_loops(self):
-        cycles = self.fsm.graph_cycles()
-        for cycle in cycles:
-            find = True
-            if len(cycle) == 1:
-                find = False
-                continue
-            for i in range(len(cycle) - 1):
-                if self.fsm.graph[cycle[i]][cycle[i+1]]['data'].event.name != '':
-                    find = False
-                    break
-            if find == True:
-                str = ' '.join(cycle) + ' '
-                self.warning('The state machine has an infinite loop: ' + str + '. Add an event!')
-                return
-
-    ###########################################################################
-    ### Verify for each state if transitions are dereminist.
-    ### Case 1: each state having more than 1 transition in where one transition
-    ###         does not have event and guard.
-    ### Case 2: several transitions and guards does not check all cases (for
-    ###         example the Richman case with init quarters < 0.
-    ###########################################################################
-    def verify_transitions(self):
-        # Case 1
-        for state in list(self.fsm.graph.nodes()):
-            out = list(self.fsm.graph.neighbors(state))
-            if len(out) <= 1:
-                continue
-            for d in out:
-                tr = self.fsm.graph[state][d]['data']
-                if (tr.event.name == '') and (tr.guard == ''):
-                    self.warning('The state ' + state + ' has an issue with its transitions: it has' +
-                                 ' several possible ways while the way to state ' + d +
-                                 ' is always true and therefore will be always a candidate and transition' +
-                                 ' to other states is non determinist.')
-        # Case 2: TODO
-
-    ###########################################################################
-    ### Entry point to check if the state machine is well formed (determinist).
-    ### Do not exit the program or throw exception, just display warning on the
-    ### console.
-    ### TODO for each node: are transitions to output neighbors mutually exclusive ?
-    ### TODO Are all states reachable ?
-    ### TODO how to parse guards to do formal prooves ? Can formal proove be
-    ### used in a networkx graph ?
-    ###########################################################################
-    def is_state_machine_determinist(self):
-        self.verify_initial_state()
-        self.verify_number_of_events()
-        self.verify_transitions()
-        pass
-
-    ###########################################################################
-    ### Entry point of graph reorganization.
-    ### When parsing PlantUML we also create on the fly the graph structure but
-    ### some reorganization on the graph may be needed after the parsing step.
-    ### TBD: we can 'optimize' by suppressing nodes that do not have events but
-    ### we prefer not modifying the graph that the user made in PlantUML. We
-    ### add instead warnings to prevent him.
-    ###########################################################################
-    def finalize_machine(self):
-        for self.fsm in self.machines.values():
-            self.is_state_machine_determinist()
-            self.manage_noevents()
-            self.verify_infinite_loops()
+            self.current.graph.nodes[state]['data'].internal += code
 
     ###########################################################################
     ### Check if the method name is not conflicting with a class method.
@@ -1362,28 +1371,28 @@ class Parser(object):
 
         # Initial/final states
         if tr.origin == '[*]':
-            self.fsm.initial_state = '[*]'
+            self.current.initial_state = '[*]'
         elif tr.destination == '[*]':
             tr.destination = '*'
-            self.fsm.final_state = '*'
+            self.current.final_state = '*'
 
         # Add nodes first to be sure to access them later
-        self.fsm.add_state(tr.origin)
-        self.fsm.add_state(tr.destination)
+        self.current.add_state(tr.origin)
+        self.current.add_state(tr.destination)
 
         # Analyse the following optional plantUML code: ": event [ guard ] / action"
         for i in range(3, len(self.tokens)):
             if self.tokens[i] == '#event':
                 N = int(self.tokens[i+1])
-                tr.event.parse_event(self.tokens[i+2:i+2+N])
+                tr.event.parse(self.tokens[i+2:i+2+N])
                 self.check_valid_method_name(tr.event.name)
                 # Make the main state machine broadcast external events to nested state machine
-                if self.fsm.parent != None:
-                    self.machines[self.main_fsm].broadcasts.append((self.fsm.name, tr.event))
+                if self.current.parent != None:
+                    self.master.broadcasts.append((self.current.name, tr.event))
                 # Events are optional. If not given, we use them as anonymous internal event.
                 # Store them in a dictionary: "event => (origin, destination) states" to create
                 # the state transition for each event.
-                self.fsm.lookup_events[tr.event].append((tr.origin, tr.destination))
+                self.current.lookup_events[tr.event].append((tr.origin, tr.destination))
             elif self.tokens[i] == '#guard':
                 tr.guard = self.tokens[i + 1][1:-1].strip() # Remove [ and ]
                 self.check_valid_method_name(tr.guard)
@@ -1403,12 +1412,13 @@ class Parser(object):
                     tr.action += tr.origin + '"\n'
 
         # Store parsed information as edge of the graph
-        self.fsm.add_transition(tr)
+        self.current.add_transition(tr)
         self.tokens = []
 
     ###########################################################################
-    ### Parse the following plantUML code and store information of the analyse:
-    ### FIXME: limitation only one "State : on event [ guard ] / action" allowed!
+    ### Parse the following plantUML code and store information of the analyse.
+    ### param[in] inst: node of the AST.
+    ### Example:
     ###    State : entry / action
     ###    State : exit / action
     ###    State : on event [ guard ] / action
@@ -1419,17 +1429,18 @@ class Parser(object):
     ###    State : event event [ guard ] / action
     ###    State : activity / activity
     ###    State : comment / C++ comment
+    ### FIXME: limitation only one "State : on event [ guard ] / action" allowed!
     ###########################################################################
     def parse_state(self, inst):
+        # Sparse test for inst.data in ['state_entry', 'state_exit' ...]
         what = inst.data[6:]
+        # State name
         name = inst.children[0].upper()
-
         # Create first a node if it does not exist. This is the simplest way
         # preventing smashing previously initialized values.
-        self.fsm.add_state(name)
-
+        self.current.add_state(name)
         # Update state fields
-        state = self.fsm.graph.nodes[name]['data']
+        state = self.current.graph.nodes[name]['data']
         if what in ['entry', 'entering']:
             state.entering += '        '
             state.entering += inst.children[1].children[0][1:].strip()
@@ -1444,7 +1455,8 @@ class Parser(object):
             state.activity += inst.children[1].children[0][1:].strip()
         # 'on event' is not sugar syntax to a real transition: since it disables
         # 'entry' and 'exit' actions but we want create a real graph edege to
-        # help us on graph theory traversal algorithm (like finding cycles).
+        # help us on graph theory traversal algorithm (like finding cycles) for
+        # unit tests.
         elif what in ['on', 'event']:
             self.tokens = [ name, '->', name ]
             for i in range(1, len(inst.children)):
@@ -1461,7 +1473,10 @@ class Parser(object):
 
     ###########################################################################
     ### Extend the PlantUML single-line comments to add extra commands to help
-    ### generating C++ code. For examples:
+    ### generating C++ code.
+    ### param[in] token: AST token
+    ### param[in] code: C++ code to store in our context.
+    ### Examples:
     ### Add code before and after the generated code:
     ###   '[brief] Message on
     ###   '[brief] two lines
@@ -1485,132 +1500,133 @@ class Parser(object):
     ###########################################################################
     def parse_extra_code(self, token, code):
         if token == '[brief]':
-            if self.fsm.extra_code.brief != '':
-                self.fsm.extra_code.brief += '\n'
-            self.fsm.extra_code.brief += code
+            if self.current.extra_code.brief != '':
+                self.current.extra_code.brief += '\n//! '
+            self.current.extra_code.brief += code
         elif token == '[header]':
-            self.fsm.extra_code.header += code
-            self.fsm.extra_code.header += '\n'
+            self.current.extra_code.header += code
+            self.current.extra_code.header += '\n'
         elif token == '[footer]':
-            self.fsm.extra_code.footer += code
-            self.fsm.extra_code.footer += '\n'
+            self.current.extra_code.footer += code
+            self.current.extra_code.footer += '\n'
         elif token == '[param]':
-            if self.fsm.extra_code.argvs != '':
-                self.fsm.extra_code.argvs += ', '
-            self.fsm.extra_code.argvs += code
+            if self.current.extra_code.argvs != '':
+                self.current.extra_code.argvs += ', '
+            self.current.extra_code.argvs += code
         elif token == '[cons]':
-            self.fsm.extra_code.cons += ', \n          '
-            self.fsm.extra_code.cons += code
+            self.current.extra_code.cons += ', \n          '
+            self.current.extra_code.cons += code
         elif token == '[init]':
-            self.fsm.extra_code.init += '        '
-            self.fsm.extra_code.init += code
-            self.fsm.extra_code.init += '\n'
+            self.current.extra_code.init += '        '
+            self.current.extra_code.init += code
+            self.current.extra_code.init += '\n'
         elif token == '[code]':
             if code not in ['public:', 'protected:', 'private:']:
-                self.fsm.extra_code.functions += '    '
-            self.fsm.extra_code.functions += code
-            self.fsm.extra_code.functions += '\n'
+                self.current.extra_code.code += '    '
+            self.current.extra_code.code += code
+            self.current.extra_code.code += '\n'
         elif token == '[test]':
-            self.fsm.extra_code.unit_tests += code
-            self.fsm.extra_code.unit_tests += '\n'
+            self.current.extra_code.unit_tests += code
+            self.current.extra_code.unit_tests += '\n'
         else:
             self.fatal('Token ' + token + ' not yet managed')
 
     ###########################################################################
-    ### Traverse the Abstract Syntax Tree of the PlantUML file
+    ### Traverse the Abstract Syntax Tree (AST) of the PlantUML file.
+    ### param[in] inst: node of the AST.
     ###########################################################################
     def visit_ast(self, inst):
+        # Parse markers for collecting lines of C++ code
         if inst.data == 'cpp_code':
             self.parse_extra_code(str(inst.children[0]), inst.children[1].strip())
+        # Parse a statechart transition
         elif inst.data == 'transition':
             # Note: we have to convert into a list of tokens since parse_state()
             # can call parse_transition() with a generated code and we do not
             # reuse the parser to create a temporary AST, instead we pass list
             # of tokens. TODO: ok this is dirty!
-            self.tokens = [str(inst.children[0]), str(inst.children[1]),
-                           str(inst.children[2])]
+            self.tokens = [str(inst.children[0]), str(inst.children[1]), str(inst.children[2])]
             for i in range(3, len(inst.children)):
                 self.tokens.append('#' + str(inst.children[i].data))
                 if inst.children[i].data != 'event':
+                    # guard and actions
                     self.tokens.append(str(inst.children[i].children[0]))
                 else:
+                    # event can comes in severval tokens
                     self.tokens.append(str(len(inst.children[i].children)))
                     for j in inst.children[i].children:
                         self.tokens.append(str(j))
             self.parse_transition(False)
+        # Composite and orthogonal states. Thanks to the iteration we can create a new
+        # file holding the nesting state.
         elif inst.data == 'state_block':
-            # Recursive operation
-            backup_fsm = self.fsm
+            # Begin of the recursive operation: save the current state machine
+            backup_fsm = self.current
             # Make the parser knows the list of state machine (one generated file by state machine)
-            self.fsm = StateMachine()
+            self.current = StateMachine()
             # Set the new name
-            self.fsm.name = str(inst.children[0])
-            self.fsm.class_name = self.fsm.name + 'Sub'
-            self.fsm.enum_name = self.fsm.class_name + 'States'
-            self.machines[self.fsm.name] = self.fsm
-            # Create links parent/sibling
-            self.fsm.parent = backup_fsm
-            backup_fsm.children.append(self.fsm)
-            # Recursive operation
+            self.current.name = str(inst.children[0])
+            self.current.class_name = 'Nested' + self.current.name
+            self.current.enum_name = self.current.class_name + 'States'
+            self.machines[self.current.name] = self.current
+            # Create links parent and sibling
+            self.current.parent = backup_fsm
+            backup_fsm.children.append(self.current)
+            # Recursive operation: iterate on the AST
             for c in inst.children[1:]:
                 self.visit_ast(c)
-            self.fsm = backup_fsm
+            # Begin of the recursive operation: restore the current state machine
+            self.current = backup_fsm
+        # Parse a statechart state
         elif inst.data[0:6] == 'state_':
             self.parse_state(inst)
+        # Skip undesired PlantUML syntax
         elif inst.data in ['comment', 'skin', 'hide']:
             return
         else:
-            self.fatal('Token ' + inst.data + ' not yet managed')
-
-    ###########################################################################
-    ### Load the PlantUML statechart grammar file.
-    ###########################################################################
-    def load_plantuml_grammar_file(self, grammar_file):
-        try:
-            self.fd = open(grammar_file)
-            self.parser = Lark(self.fd.read())
-            self.fd.close()
-        except Exception as FileNotFoundError:
-            self.fatal('Failed loading grammar file ' + grammar_file + ' for parsing plantuml statechart')
-
-    ###########################################################################
-    ### Parse plantUML file parser and create a graph structure.
-    ### param[in] postfix: postfix name for the state machine name.
-    ###########################################################################
-    def parse_plantuml_file(self, umlfile, postfix):
-        self.umlfile = umlfile
-        # Create the main state machine
-        self.fsm = StateMachine()
-        self.fsm.name = Path(self.umlfile).stem
-        self.fsm.class_name = self.fsm.name + postfix
-        self.fsm.enum_name = self.fsm.class_name + 'States'
-        self.machines[self.fsm.name] = self.fsm
-        self.main_fsm = self.fsm.name
-        # Make the parser understand the plantUML grammar
-        if self.parser == None:
-            self.load_plantuml_grammar_file(os.path.join(os.getcwd(), 'statecharts.ebnf'))
-        # Make the parser read the plantUML file
-        self.fd = open(self.umlfile, 'r')
-        self.ast = self.parser.parse(self.fd.read())
-        self.fd.close()
-        # Debug: uncomment to see AST
-        # print(self.ast.pretty())
-        # Traverse the AST to create the graph structure of the state machine
-        for inst in self.ast.children:
-            self.visit_ast(inst)
+            self.fatal('Token ' + inst.data + ' not yet managed. Please open a GitHub ticket to manage it')
 
     ###########################################################################
     ### Entry point for translating a plantUML file into a C++ source file.
-    ### param[in] umlfile: path to the plantuml file.
+    ### param[in] uml_file: path to the plantuml file.
     ### param[in] cpp_or_hpp: generated a C++ source file ('cpp') or a C++ header file ('hpp').
     ### param[in] postfix: postfix name for the state machine name.
     ###########################################################################
-    def translate(self, umlfile, cpp_or_hpp, postfix):
-        if not os.path.isfile(umlfile):
-            print('File path ' + umlfile + ' does not exist. Exiting!')
-            sys.exit(-1)
-        self.parse_plantuml_file(umlfile, postfix)
-        self.finalize_machine()
+    def translate(self, uml_file, cpp_or_hpp, postfix):
+        # Make the parser understand the plantUML grammar
+        if self.parser == None:
+            grammar_file = os.path.join(os.getcwd(), 'statecharts.ebnf')
+            if not os.path.isfile(grammar_file):
+                self.fatal('File path ' + grammar_file + ' does not exist!')
+            try:
+                self.fd = open(grammar_file)
+                self.parser = Lark(self.fd.read())
+                self.fd.close()
+            except Exception as FileNotFoundError:
+                self.fatal('Failed loading grammar file ' + grammar_file + ' for parsing plantuml statechart')
+        # Make the parser read the plantUML file
+        if not os.path.isfile(uml_file):
+            self.fatal('File path ' + uml_file + ' does not exist!')
+        self.uml_file = uml_file
+        self.fd = open(self.uml_file, 'r')
+        self.ast = self.parser.parse(self.fd.read())
+        self.fd.close()
+        # Create the main state machine
+        self.current = StateMachine()
+        self.current.name = Path(uml_file).stem
+        self.current.class_name = self.current.name + postfix
+        self.current.enum_name = self.current.class_name + 'States'
+        self.master = self.current
+        self.machines[self.current.name] = self.current
+        # Traverse the AST to create the graph structure of the state machine
+        # Uncomment to see AST: print(self.ast.pretty())
+        for inst in self.ast.children:
+            self.visit_ast(inst)
+        # Do some operation on the state machine
+        for self.current in self.machines.values():
+            self.current.is_determinist()
+            self.manage_noevents()
+        # Generate the C++ code
         self.generate_code(cpp_or_hpp, False)
 
 ###############################################################################
