@@ -1,0 +1,18 @@
+@startuml
+
+[*] -> Idle : turn on
+[*] --> SettingHours : turn on [min == 0 && hours == 0]
+Idle --> SettingHours : set
+SettingHours --> SettingMinutes : set
+SettingMinutes --> Idle : set
+
+Idle : do / show current time
+SettingHours : entry / beep()
+SettingHours : do / show hours()
+SettingHours : event incr / hours = (hours + 1) % 24
+
+SettingMinutes : entry / beep()
+SettingMinutes : do / show mins()
+SettingMinutes : event incr / min = (min + 1) % 60
+
+@enduml
