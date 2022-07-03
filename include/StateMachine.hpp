@@ -175,7 +175,7 @@ public:
 
     //! \brief Define the type of container holding all stated of the state
     //! machine.
-    using States = std::array<State, int(STATES_ID::MAX_STATES)>;
+    using States = State[int(STATES_ID::MAX_STATES)];
     //! \brief Define the type of container holding states transitions. Since
     //! a state machine is generally a sparse matrix we use red-back tree.
     using Transitions = std::map<STATES_ID, Transition>;
