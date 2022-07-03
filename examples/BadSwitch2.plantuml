@@ -1,6 +1,10 @@
 @startuml
 skin rose
 
+'[brief] State2 has an event to transit to State1 but has no event and no guard for State3.
+'[brief] Therefore the state machine is not determinist.
+
+
 [*] -> A
 A -> B : [ guard1() ]
 A --> C : [ guard2() ]

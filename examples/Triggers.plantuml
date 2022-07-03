@@ -1,6 +1,8 @@
 @startuml
 skin rose
 
+'[brief] Two same events 'e' but with different guards to transiti to different states.
+
 [*] -> A
 A -> B : e [x == 10]
 A --> C : e

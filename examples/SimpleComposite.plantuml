@@ -1,6 +1,8 @@
 @startuml
 skin rose
 
+'[brief] Test simple composite state.
+
 [*] -> EnableSystem
 
 state EnableSystem {

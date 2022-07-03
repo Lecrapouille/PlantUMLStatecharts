@@ -1,11 +1,13 @@
 @startuml
 skin rose
 
-'[code] private:
-'[code]     int gumballs;
-'[init]     gumballs = 1;
+'[brief] Simulate a gumball distributor.
+'[header] #include <stdio.h>
+'[param] int count
+'[cons] gumballs(count)
+'[code] int gumballs;
+'[test] MockGumballController() : GumballController(1) {}
 
-' FIXME Passer gumballs en constructor + HasQuarter or NoQuarter
 [*] --> NoQuarter : [ gumballs > 0 ]
 [*] --> OutOfGumballs : [ gumballs == 0 ]
 NoQuarter -> HasQuarter : insert quarter
@@ -13,5 +15,12 @@ HasQuarter -> NoQuarter : eject quarter
 HasQuarter --> GumballSold : turn crank / --gumballs
 GumballSold -> NoQuarter : [ gumballs > 0 ]
 GumballSold -> OutOfGumballs : [ gumballs == 0 ]
+
+NoQuarter : comment / The distributor is waiting for a coin
+HasQuarter: comment / The distributor is waiting the client turns the crank
+GumballSold : comment / The distributor is giving a gumball
+GumballSold : entering / printf("A gumball is rolling ...\n");
+OutOfGumballs : comment / The distributor is sold out
+OutOfGumballs : do / printf("Sorry no more gumballs\n");
 
 @enduml

@@ -1,6 +1,8 @@
 @startuml
 skin rose
 
+'[brief] Test simple orthogonal state.
+
 [*] -> EnableSystem
 
 state EnableSystem {

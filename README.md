@@ -140,12 +140,15 @@ Note: I added some sugar syntax:
 I added some syntax to help generate extra C++ code. They start with the `'`
 keyword which is a PlantUML single line comment so they will not produce syntax
 error when PlantUML is parsing the file but, on our side, we exploit them.
+- `'[brief]` for adding a comment for the generated state machine class.
 - `'[header]` for adding code in the header of the file, before the class of the
   state machine. You can include other C++ files, create or define functions.
 - `'[footer]` for adding code in the footer of the file, after the class of the
   state machine.
 - `'[param]` are arguments to pass to the state machine C++ constructor. Commas
   are added. One argument by line.
+- `'[cons]` to allow init the argument before the code of the constructor.
+  One argument by line.
 - `'[init]` is C++ code called by the constructor or bu the `reset()` function.
 - `'[code]` to allow you to add member variables or member functions.
 

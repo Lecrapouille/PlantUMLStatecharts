@@ -2,6 +2,8 @@
 skin rose
 hide empty description
 
+'[brief] Park Assistant searching an empty parking slot and doing the maneuver to park the car.
+
 [*] --> IDLE
 
 IDLE --> SCAN_PARKING_SPOTS : turning indicator [ !isParked() ]\n--\nm_fsm_scan.enter()

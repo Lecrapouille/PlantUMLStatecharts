@@ -1,6 +1,8 @@
 @startuml
 skin rose
 
+'[brief] Show accepted syntax for generate state machine.
+
 ' This is a PlantUML single line commentary as well as the next lines
 ' but they are interpreter by our translator for adding C++ code in
 ' the generated code.

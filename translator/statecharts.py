@@ -194,6 +194,8 @@ class State(object):
 ###############################################################################
 class ExtraCode(object):
     def __init__(self):
+        # Main comment
+        self.brief = ''
         # Code to be placed on the header of the generated code (before the
         # state machine class definition).
         self.header = ''
@@ -802,7 +804,10 @@ class Parser(object):
     ### Entry point to generate the whole state machine class and all its methods.
     ###########################################################################
     def generate_state_machine_class(self):
-        self.generate_function_comment('State machine concrete implementation.')
+        if self.fsm.extra_code.brief != '':
+            self.generate_function_comment(self.fsm.extra_code.brief)
+        else:
+            self.generate_function_comment('State machine concrete implementation.')
         self.fd.write('class ' + self.fsm.class_name + ' : public StateMachine<')
         self.fd.write(self.fsm.class_name + ', ' + self.fsm.enum_name + '>\n')
         self.fd.write('{\n')
@@ -1458,23 +1463,32 @@ class Parser(object):
     ### Extend the PlantUML single-line comments to add extra commands to help
     ### generating C++ code. For examples:
     ### Add code before and after the generated code:
-    ###   'header #include <foo>
-    ###   'footer class Foo {
-    ###   'footer private: ...
-    ###   'footer };
+    ###   '[brief] Message on
+    ###   '[brief] two lines
+    ###   '[header] #include <foo>
+    ###   '[header] class Foo {
+    ###   '[header] private: ...
+    ###   '[header] };
+    ###   '[footer] class Bar {};
     ### Add extra member functions or member variables:
-    ###   'code private:
-    ###   'code void extra_method();
+    ###   '[code] private:
+    ###   '[code] void extra_method();
     ### Add extra arguments to the constructor:
-    ###   'param Foo foo
-    ###   'param Bar bar
+    ###   '[param] Foo foo
+    ###   '[param] Bar bar
+    ###   '[cons] m_foo(foo)
+    ###   '[cons] m_bar(bar)
     ### Add code in the constructor
-    ###   'init bar.x = 42;
+    ###   '[init] bar.x = 42;
     ### Unit tests:
-    ###   'test ...
+    ###   '[test] MockMotorController() : MotorController(42) {}
     ###########################################################################
     def parse_extra_code(self, token, code):
-        if token == '[header]':
+        if token == '[brief]':
+            if self.fsm.extra_code.brief != '':
+                self.fsm.extra_code.brief += '\n'
+            self.fsm.extra_code.brief += code
+        elif token == '[header]':
             self.fsm.extra_code.header += code
             self.fsm.extra_code.header += '\n'
         elif token == '[footer]':
