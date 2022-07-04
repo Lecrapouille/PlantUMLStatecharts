@@ -1,0 +1,36 @@
+@startuml
+
+state State0 {
+  state State1 {
+    state State11 {
+    }
+    [*] -> State11
+  }
+
+  state State2 {
+    state State21 {
+      state State211 {
+      }
+      [*] -> State211
+    }
+    [*] -> State21
+  }
+
+  [*] -> State1
+}
+
+[*] -> State0
+State1 -> State211 : f
+
+State0   : entry / printf("Entering in State0")
+State0   : exit  / printf("Leaving in State0")
+State1   : entry / printf("Entering in State1")
+State1   : exit  / printf("Leaving in State1")
+State11  : entry / printf("Entering in State11")
+State11  : exit  / printf("Leaving in State11")
+State21  : entry / printf("Entering in State21")
+State21  : exit  / printf("Leaving in State21")
+State211 : entry / printf("Entering in State211")
+State211 : exit  / printf("Leaving in State211")
+
+@enduml
