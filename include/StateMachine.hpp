@@ -375,12 +375,6 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
             // Transition
             STATES_ID previous_state = m_current_state;
             m_current_state = transition->destination;
-            if (transition->action != nullptr)
-            {
-                LOGD("[STATE MACHINE] Call the transition %s -> %s action\n",
-                     stringify(previous_state), stringify(transition->destination));
-                (static_cast<FSM*>(this)->*transition->action)();
-            }
 
             // Transitioning to a new state ?
             if (previous_state != transition->destination)
@@ -392,7 +386,19 @@ void StateMachine<FSM, STATES_ID>::transition(Transition const* tr)
                          stringify(previous_state));
                     (static_cast<FSM*>(this)->*cst.leaving)();
                 }
+            }
 
+            // Do transitiona ction
+            if (transition->action != nullptr)
+            {
+                LOGD("[STATE MACHINE] Call the transition %s -> %s action\n",
+                     stringify(previous_state), stringify(transition->destination));
+                (static_cast<FSM*>(this)->*transition->action)();
+            }
+
+            // Transitioning to a new state ?
+            if (previous_state != transition->destination)
+            {
                 // Do reactions when entring into the new state
                 if (nst.entering != nullptr)
                 {
