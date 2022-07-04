@@ -361,6 +361,14 @@ class StateMachine(object):
         self.warning('The state machine shall have at least one event.')
 
     ###########################################################################
+    ### All states must have at least one incoming transition.
+    ###########################################################################
+    def verify_incoming_transitions(self):
+        for state in list(self.graph.nodes()):
+            if state != '[*]' and len(list(self.graph.predecessors(state))) == 0:
+                self.warning('The state ' + state + ' shall have at least one incoming transition')
+
+    ###########################################################################
     ### Check if the state machine does not have infinite loops (meaning a
     ### cycle in the graph where all transitions do not have events).
     ###########################################################################
@@ -416,6 +424,7 @@ class StateMachine(object):
     def is_determinist(self):
         self.verify_initial_state()
         self.verify_number_of_events()
+        self.verify_incoming_transitions()
         self.verify_transitions()
         self.verify_infinite_loops()
         pass
