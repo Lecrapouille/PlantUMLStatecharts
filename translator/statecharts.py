@@ -155,10 +155,30 @@ class Transition(object):
         self.count_guard = 0
         # Expected number of times the mock is called.
         self.count_action = 0
+        # Save the arrow (for generating the PlantUML file back)
+        self.arrow = ''
 
     def __str__(self):
-        return self.origin + ' ==> ' + self.destination + ' : ' + \
-               self.event.name + ' [' + self.guard + '] / ' + self.action
+        # Internal transition
+        if self.origin == self.destination:
+            return self.origin + ' : on ' + self.event.name + \
+                   ' [' + self.guard + '] / ' + self.action
+        # source -> destination or destination <- source
+        dest = '[*]' if self.destination == '*' else self.destination
+        if self.arrow[-1] == '>':
+            code = self.origin + ' ' + self.arrow + ' ' + dest
+        else:
+            code = dest + ' ' + self.arrow + ' ' + self.origin
+        # Event, guard and action
+        if self.event.name != '' or self.guard != '' or self.action != '':
+            code += ' : '
+        if self.event.name != '':
+            code += self.event.name
+        if self.guard != '':
+           code += ' [' + self.guard + ']'
+        if self.action != '':
+           code += '\\n--\\n' + self.action
+        return code
 
 ###############################################################################
 ### Structure holding information after having parsed a PlantUML state.
@@ -191,7 +211,18 @@ class State(object):
         self.count_leaving = 0
 
     def __str__(self):
-        return self.name + '(entering: ' + self.entering + ') (exit:' + self.leaving + ')'
+        code = ''
+        if self.entering != '':
+            code += self.name + ' : entering / ' + self.entering.strip()
+        if self.leaving != '':
+            if code != '':
+                code += '\n'
+            code += self.name + ' : leaving / ' + self.leaving.strip()
+        if self.activity != '':
+            if code != '':
+                code += '\n'
+            code += self.name + ' : activity / ' + self.activity.strip()
+        return code
 
 ###############################################################################
 ### Structure holding extra lines of C++ code. These lines will be merged in
@@ -694,6 +725,48 @@ class Parser(object):
         return 'm_nested_' + fsm.name.lower()
 
     ###########################################################################
+    ### Generate the PlantUML code from the graph.
+    ###########################################################################
+    def generate_plantuml_code(self, comm=''):
+        code = ''
+        for node in list(self.current.graph.nodes()):
+            if node in ['[*]', '*']:
+                continue
+            state = self.current.graph.nodes[node]['data']
+            if state.entering == '' and state.leaving == '' and state.activity == '':
+                continue
+            code += comm + str(state) + '\n'
+        for src in list(self.current.graph.nodes()):
+            for dest in list(self.current.graph.neighbors(src)):
+                tr = self.current.graph[src][dest]['data']
+                code += comm + str(tr) + '\n'
+        return code
+
+    ###########################################################################
+    ### Generate the PlantUML file from the graph structure. 
+    ###########################################################################
+    def generate_plantuml_file(self):
+        for self.current in self.machines.values():
+            self.fd = open(self.current.name + '-interpreted.plantuml', 'w')
+            self.fd.write('@startuml\n')
+            self.fd.write(self.generate_plantuml_code())
+            self.fd.write('@enduml\n')
+            self.fd.close()
+
+    ###########################################################################
+    ### Generate the comment for the state machine class. 
+    ###########################################################################
+    def generate_class_comment(self):
+        if self.current.extra_code.brief != '':
+            comment = self.current.extra_code.brief
+        else:
+            comment = 'State machine concrete implementation.'
+        comment += '\n//! \\startuml\n'
+        comment += self.generate_plantuml_code('//! ')
+        comment += '//! \\enduml'
+        self.generate_function_comment(comment)
+
+    ###########################################################################
     ### Generate the table of states holding their entering or leaving actions.
     ### Note: the table may be empty (all states do not actions) in this case
     ### the table is not generated.
@@ -908,10 +981,7 @@ class Parser(object):
     ### Entry point to generate the whole state machine class and all its methods.
     ###########################################################################
     def generate_state_machine_class(self):
-        if self.current.extra_code.brief != '':
-            self.generate_function_comment(self.current.extra_code.brief)
-        else:
-            self.generate_function_comment('State machine concrete implementation.')
+        self.generate_class_comment()
         self.fd.write('class ' + self.current.class_name + ' : public StateMachine<')
         self.fd.write(self.current.class_name + ', ' + self.current.enum_name + '>\n')
         self.fd.write('{\n')
@@ -1293,7 +1363,7 @@ class Parser(object):
     ### param[in] separated if False then the main() function is generated in
     ### the same file else in a separated.
     ###########################################################################
-    def generate_code(self, cxxfile, separated):
+    def generate_cxx_code(self, cxxfile, separated):
         files = []
         for self.current in self.machines.values():
             f = self.current.class_name + 'Tests.cpp'
@@ -1371,7 +1441,8 @@ class Parser(object):
     def parse_transition(self, as_state = False):
         tr = Transition()
 
-        if self.tokens[1][-1] == '>':
+        tr.arrow = self.tokens[1]
+        if tr.arrow[-1] == '>':
             # Analyse the following plantUML code: "origin state -> destination state ..."
             tr.origin, tr.destination = self.tokens[0].upper(), self.tokens[2].upper()
         else:
@@ -1636,7 +1707,9 @@ class Parser(object):
             self.current.is_determinist()
             self.manage_noevents()
         # Generate the C++ code
-        self.generate_code(cpp_or_hpp, False)
+        self.generate_cxx_code(cpp_or_hpp, False)
+        # Generate the interpreted plantuml code
+        self.generate_plantuml_file()
 
 ###############################################################################
 ### Display command line usage
