@@ -1400,6 +1400,8 @@ class Parser(object):
             code = ''
             for dest in list(self.current.graph.neighbors(state)):
                 tr = self.current.graph[state][dest]['data']
+                if tr.event.name != '':
+                   continue
                 if tr.guard != '':
                     code += '        if (' + self.guard_function(state, dest) + '())\n'
                 elif tr.event.name == '': # Dummy event and dummy guard
