@@ -743,7 +743,7 @@ class Parser(object):
         return code
 
     ###########################################################################
-    ### Generate the PlantUML file from the graph structure. 
+    ### Generate the PlantUML file from the graph structure.
     ###########################################################################
     def generate_plantuml_file(self):
         for self.current in self.machines.values():
@@ -754,7 +754,7 @@ class Parser(object):
             self.fd.close()
 
     ###########################################################################
-    ### Generate the comment for the state machine class. 
+    ### Generate the comment for the state machine class.
     ###########################################################################
     def generate_class_comment(self):
         if self.current.extra_code.brief != '':
