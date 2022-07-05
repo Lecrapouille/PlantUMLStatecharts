@@ -1403,15 +1403,18 @@ class Parser(object):
                 if tr.event.name != '':
                    continue
                 if tr.guard != '':
-                    code += '        if (' + self.guard_function(state, dest) + '())\n'
+                    if code == '':
+                        code += '        if '
+                    else :
+                        code += '        else if '
+                    code += '(' + self.guard_function(state, dest) + '())\n'
                 elif tr.event.name == '': # Dummy event and dummy guard
                     if count == 1:
                         code += '\n#warning "Missformed state machine: missing guard from state ' + state + ' to state ' + dest + '"\n'
                         code += '        /* MISSING GUARD: if (guard) */\n'
                     elif count > 1:
                         code += '\n#warning "Undeterminist State machine detected switching from state ' + state + ' to state ' + dest + '"\n'
-
-                if tr.event.name == '': # and state != self.current.initial_state:
+                if tr.event.name == '':
                     code += '        {\n'
                     code += '            LOGD("[' + self.current.class_name.upper() + '][STATE ' + state +  '] Candidate for internal transitioning to state ' + dest + '\\n");\n'
                     code += '            static const Transition tr =\n'
@@ -1421,7 +1424,6 @@ class Parser(object):
                         code += '                .action = &' + self.transition_function(state, dest, True) + ',\n'
                     code += '            };\n'
                     code += '            transition(&tr);\n'
-                    code += '            return ;\n'
                     code += '        }\n'
                     count += 1
             self.current.graph.nodes[state]['data'].internal += code
