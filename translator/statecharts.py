@@ -735,7 +735,7 @@ class Parser(object):
             state = self.current.graph.nodes[node]['data']
             if state.entering == '' and state.leaving == '' and state.activity == '':
                 continue
-            code += comm + str(state) + '\n'
+            code += comm + str(state).replace('\n', '\n' + comm) + '\n'
         for src in list(self.current.graph.nodes()):
             for dest in list(self.current.graph.neighbors(src)):
                 tr = self.current.graph[src][dest]['data']
