@@ -722,6 +722,8 @@ class Parser(object):
     ### param[in] fsm the nested state machine.
     ###########################################################################
     def child_machine_instance(self, fsm):
+        if isinstance(fsm, str):
+            return 'm_nested_' + fsm.lower()
         return 'm_nested_' + fsm.name.lower()
 
     ###########################################################################
@@ -881,7 +883,7 @@ class Parser(object):
         for (sm, e) in self.current.broadcasts:
             self.generate_method_comment('Broadcast external event.')
             self.indent(1), self.fd.write('inline '), self.fd.write(e.header())
-            self.fd.write(' { ' + self.child_machine_instance(self.current) + '.' + e.caller() + ' }\n\n')
+            self.fd.write(' { ' + self.child_machine_instance(sm) + '.' + e.caller() + '; }\n\n')
         # React to external events
         for event, arcs in self.current.lookup_events.items():
             if event.name == '':
