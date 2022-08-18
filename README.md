@@ -289,8 +289,7 @@ Our implementation is the following:
   an introduction to UML statecharts in French.
 - [ML/SysML Diagramme d'etat Programmation Arduino](https://eduscol.education.fr/sti/ressources_pedagogiques/umlsysml-diagramme-detat-et-programmation-arduino#fichiers-liens)
   a French course to statecharts with open source code source. The API is simple
-  to read (while not enough self protecting in my taste) but is the only one I
-  saw offering HSM, activities, history, ...
+  to read but is the only one I saw offering HSM, activities, history, ...
 - [State Machine Design in C++](https://www.codeproject.com/Articles/1087619/State-Machine-Design-in-Cplusplus-2)
   The C++ code of our state machine is inspired by this project.
 - [Towards Efficient Code Synthesis from Statecharts](https://cs.emis.de/LNI/Proceedings/Proceedings07/TowardEfficCode_3.pdf)
