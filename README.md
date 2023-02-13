@@ -1,13 +1,13 @@
 # PlantUML Statecharts (State Machine) Translator
 
 A Python3 tool parsing [PlantUML statecharts](https://plantuml.com/fr/state-diagram)
-scripts for generating C++ code and its unit tests.
+scripts and generating C++11 code with its unit tests.
 
 This [repository](https://github.com/Lecrapouille/Statecharts) contains:
 - A single C++11 header file containing the base code for defining a state
   machine. You can use it to define manually your own state machines. The code
   is [here](include/StateMachine.hpp).
-- A Python v3 script reading [PlantUML
+- A Python3 script reading [PlantUML
   statecharts](https://plantuml.com/fr/state-diagram) and generating Statecharts
   (aka finite state machines or FSM) in C++11 code as a child class of the base
   state machine defined in the header file. The code is
@@ -20,7 +20,7 @@ The Python script offers you:
   [boost](https://github.com/boost-ext/sml) lib).
 - To do some basic verification to check if your state machine is well
   formed.
-- To generate C++ unit tests (in [Google
+- To generate C++ unit tests (using [Google
   tests](https://github.com/google/googletest)) to verify if your state machine
   is functional.
 - The goal of this tool is to separate things: one part is to manage the logic of
@@ -39,6 +39,7 @@ in the last section of this document.
 
 ## Limitation: what the tools cannot offer to you
 
+- Generate only C++ code. You can help contributing to generate other languages.
 - Parsing Hierarchic State Machine (HSM). Currently, the tool only parses simple
   Finite State Machine (FSM). I'm thinking about how to upgrade this tool.
 - For FSM, the tool does not parse fork, concurrent states, composite states,
@@ -48,7 +49,7 @@ in the last section of this document.
   destination state). As consequence, you cannot add several `on event` in the
   same state.
 - I am not a UML expert, so probably this tool does not follow strictly UML
-  standards. This tool has never been used in production code.
+  standards. This tool has not yet been used in real production code.
 - Does not offer formal proof to check if your output transitions from a state
   are mutually exclusive or if some branches are not reachable. This is currently
   too complex for me to develop (any help is welcome): we need to parse and
@@ -65,14 +66,14 @@ in the last section of this document.
 
 ## Prerequisite
 
-- Python3.
-- [Lark](https://github.com/lark-parser/lark) a parsing toolkit for Python. It
-  is used for reading PlantUML files.
-- [Networkx](https://networkx.org/) before the PlantUML is translated into C++
-  file, a directed graph structure is created as an intermediate structure before
-  generating the C++ code (shall be ideally a MultiDiGraph).
-- [PlantUML](https://plantuml.com) to generate pictures of examples (Makefile)
-  and it is not used by our tool.
+- Python3 and the following packages:
+  - [Lark](https://github.com/lark-parser/lark) a parsing toolkit for Python. It
+    is used for reading PlantUML files.
+  - [Networkx](https://networkx.org/) before the PlantUML is translated into C++
+    file, a directed graph structure is created as an intermediate structure before
+    generating the C++ code (shall be ideally a MultiDiGraph).
+- [PlantUML](https://plantuml.com) called by the Makefile to generate PNG pictures
+  of examples but it is not used by our Python3 script.
 
 ```
 python3 -m pip install networkx lark
@@ -81,20 +82,20 @@ python3 -m pip install networkx lark
 ## Command line
 
 ```
-./parser.py <plantuml statechart file> <cpp|hpp> [name]
+./statecharts.py <plantuml statechart file> <langage> [name]
 ```
 
 Where:
 - `plantuml statechart file` is the path of the [PlantUML
    statecharts](https://plantuml.com/fr/state-diagram) file as input.  This repo
    contains [examples](examples/input).
-- `cpp|hpp` is either `"cpp"` to force create a C++ source file or `"hpp"` to
+- `langage` is either `"cpp"` to force create a C++ source file or `"hpp"` to
   force create a C++ header file.
 - `name` is optional and allows giving prefix to the C++ class name and file.
 
 Example:
 ```
-./parser.py foo.plantuml cpp controller
+./statecharts.py foo.plantuml cpp controller
 ```
 
 Will create a `FooController.cpp` file with a class name `FooController`.
@@ -106,15 +107,17 @@ cd examples
 make -j8
 ```
 
-Examples are compiled into the `build` folder. You can run binaries. For example:
+Examples are compiled into the `build` folder as well as their PNG file.
+You can run binaries. For example:
 ```
 ./build/Gumball
 ```
 
 ## PlantUML Statecharts syntax
 
-This tool does not pretend to understand all PlantUML syntax or UML statecharts.
-Here is the basic PlantUML statecharts syntax it can understand:
+This tool does not pretend to parse the whole PlantUML syntax or implement the
+whols UML statecharts standard. Here is the basic PlantUML statecharts syntax it
+can understand:
 - `FromState --> ToState : event [ guard ] / action`
 - `FromState -> ToState : event [ guard ] / action`
 - `ToState <-- FromState : event [ guard ] / action`
@@ -137,7 +140,7 @@ Note: I added some sugar syntax:
 - `State : leaving / action` alias for `State : exit / action`.
 - `State : comment / description` to add a C++ comment for the state in the
   generated code.
-- `\n--\n action` alias for `/ action` to follow State-Transition diagrams used
+- `\n--\n action` alias for `/ action` to follow State-Transition Diagrams used
   in [Structured Analysis for Real
   Time](https://academicjournals.org/journal/JETR/article-full-text-pdf/07144DC1419)
   (but also to force carriage return on PlantUML diagrams).
@@ -156,6 +159,7 @@ error when PlantUML is parsing the file but, on our side, we exploit them.
   One argument by line.
 - `'[init]` is C++ code called by the constructor or bu the `reset()` function.
 - `'[code]` to allow you to add member variables or member functions.
+- `'[test]` to allow you to add C++ code for unit tests.
 
 ## Things that I did not understand about state machines before this project
 
@@ -171,15 +175,13 @@ Moore machine into a Mealy machine and vice versa, without losing any
 expressiveness
 [cite](https://www.itemis.com/en/yakindu/state-machine/documentation/user-guide/overview_what_are_state_machines). In
 1984, Harel mixed the two syntaxes plus added some features (composite ...) and
-named it statecharts. Finally UML integrated statecharts.
+named it statecharts. Finally UML integrated statecharts in their standard.
 
 Some tools like the one explained in this
 [document](https://cs.emis.de/LNI/Proceedings/Proceedings07/TowardEfficCode_3.pdf)
 simplify the statecharts graph to get a Mealy graph before generating the
 code. In the case of our translator, to keep the code simple to read, the state
-machine is not simplified and actions are made by states and by transitions. The
-order of execution of actions can disturb the beginner. I explain it in the next
-section.
+machine is not simplified and actions are made by states and by transitions.
 
 Another point of confusion hat is the difference between action and activity.
 The action is instantaneous: it does not consume time (contrary to the
@@ -188,6 +190,9 @@ external events the state reacts to. The thread is halted when the activity is
 done or when the system switches state. Therefore, an activity shall not be
 seen by a periodic external `update` event since its code does not necessarily be
 repeated.
+
+My last point of confusion concerned the order of execution of actions in
+transitions and in states. I explain it in the next section.
 
 ## Rule of execution in Statecharts
 
@@ -220,22 +225,26 @@ immediately made in an atomic way. In our example, if `event1`, `event2`, and
 `guard1` were not present this would create an infinite loop.
 
 Events shall be mutually exclusive since we are dealing in discrete time events,
-several events can occur during the delta time.
+several events can occur during the delta time but since in this API you have to
+call the event and the state machine reacts immediately, the order is defined by
+the caller.
 
 ## Details Design
 
-The translating process pipeline of the Python script is the following:
-- The [Lark](https://github.com/lark-parser/lark) parser is loading the
-  [grammar](tool/statechart.ebnf) file for parsing PlantUML statecharts
-  files. Note: this grammar does not come from an official source (PlantUML does
-  not offer their grammar). It manages a subset of the syntax.
+The translation pipeline of the Python script is the following:
+- The [Lark](https://github.com/lark-parser/lark) parser loads the
+  [grammar](tool/statechart.ebnf) file for parsing the PlantUML statechart
+  file. Note: this grammar does not come from an official source (PlantUML does
+  not offer their grammar. I manages a subset of their syntax).
 - The [PlantUML statecharts](https://plantuml.com/fr/state-diagram) file is then
-  parsed and an Abstract Syntax Tree (AST) is generated.
-- This AST is then visited and a graph [Networkx](https://networkx.org/)
-  the structure is created (nodes are states and arcs are transitions).
+  parsed by Lark and an Abstract Syntax Tree (AST) is generated.
+- This AST is then visited and a digraph [Networkx](https://networkx.org/)
+  structure is created (nodes are states and arcs are transitions). Events and
+  actions are stored to them.
 - This graph is visited to make some verification (if the state machine is well
-  formed ...), to generate the C++ code source and to generate unit tests from
-  graph cycles or graph paths from source to sinks ...
+  formed ...), then to generate the C++ code source. Unit tests are generating
+  from graph cycles or paths from source to sinks (what inputs make me reach the
+  desired state) ...
 
 How is the generated code? The state machine, like any graph structure (nodes
 are states and edges are transitions) can be depicted by a matrix.
@@ -258,7 +267,7 @@ shown). In practice the table is usually sparse:
 - The first row holds events.
 - For each event (therefore for each column) each matrix cell holds the
   destination state. The third column has no event, and the consequence is that
-  the state is immediately switched.
+  the state is immediately transited.
 
 Our implementation is the following:
 - A private fixed-size array holds states and their entry/exit actions (pointers

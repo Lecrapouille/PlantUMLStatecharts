@@ -53,13 +53,15 @@ class bcolors:
 ###    get quarter
 ###    get quarter()
 ###    setSpeed(x)
+###    set speed(x)
 ###    fooBar(x, y)
+###    foo bar(x, y)
 ###############################################################################
 class Event(object):
     def __init__(self):
-        # Name of the event (C++ function name without arguments and return).
+        # Name of the event (C++ function name without its parameters).
         self.name = ''
-        # List of optional arguments (C++ argument name, no typage).
+        # List of optional parameters (C++ parameter names without their type).
         self.params = []
 
     ###########################################################################
@@ -80,7 +82,7 @@ class Event(object):
             # Split param if and only if on the last elements of tokens
             if tokens[i][0] == '(':
                 if i != N-1:
-                    self.fatal('Bad parentesis')
+                    self.fatal('Mismatch parentesis for the current event!')
                 self.params = tokens[i].split('(')[1][:-1].split(',')
             # If single event name: do not change case, else first token is lower
             elif i == 0:
@@ -105,8 +107,8 @@ class Event(object):
         return 'void ' + self.name + '(' + params + ')'
 
     ###########################################################################
-    ### Generate the call of the C++ method.
-    ### param[in] var optinal variable name passed to the function.
+    ### Generate the call to the C++ method.
+    ### param[in] var optional variable name passed to the function.
     ### For example returns:
     ###   fooBar(var.x, var.y)
     ### Or:
@@ -151,11 +153,11 @@ class Transition(object):
         self.guard = ''
         # Action code (C++ code or pseudo code).
         self.action = ''
-        # Expected number of times the mock is called.
+        # Expected number of times the mock is called (for unit tests).
         self.count_guard = 0
-        # Expected number of times the mock is called.
+        # Expected number of times the mock is called (for unit tests).
         self.count_action = 0
-        # Save the arrow (for generating the PlantUML file back)
+        # Save the arrow direction (for generating the PlantUML file back)
         self.arrow = ''
 
     def __str__(self):
@@ -305,7 +307,7 @@ class StateMachine(object):
     ### Add a graph node with a dummy attribute named 'data' of type State.
     ### The node is created if and only if it does not belong to the graph.
     ### We have to call this function to be sure to create a 'data' attribute
-    ### to avoid checking if present or not.
+    ### to avoid checking its presence.
     ### param[in] name the name of the state.
     ###########################################################################
     def add_state(self, name):
@@ -316,7 +318,7 @@ class StateMachine(object):
     ### Add a graph edge with the given attribute named 'data' of type Transition
     ### Note: the graph source node and the graph source destination shall have
     ### been inserted first.
-    ### param[in] tr the state machine transition.
+    ### param[in] tr the state machine transition to add.
     ###########################################################################
     def add_transition(self, tr):
         self.graph.add_edge(tr.origin, tr.destination, data=tr)
@@ -353,7 +355,7 @@ class StateMachine(object):
 
     ###########################################################################
     ### Return all paths from all sources to sinks (list of list of nodes).
-    ### This is a general algorithm since a state machine starts from a single
+    ### This is a general algorithm even if a state machine starts from a single
     ### entry node.
     ###########################################################################
     def graph_all_paths_to_sinks(self):
@@ -367,7 +369,7 @@ class StateMachine(object):
 
     ###########################################################################
     ### The main state machine shall have an initial state [*].
-    ### Nested state mzchine may not start by [*] but shall have at least one
+    ### Nested state machine may not start by [*] but shall have at least one
     ### entering transistion (sink source).
     ###########################################################################
     def verify_initial_state(self):
@@ -568,7 +570,7 @@ class Parser(object):
         self.fd.write(' ' * 4 * depth)
 
     ###########################################################################
-    ###
+    ### Generate #include "foo.h" or #include <foo.h>
     ###########################################################################
     def generate_include(self, indent, b, file, e):
         self.fd.write('#' + (' ' * 2 * indent) + 'include ' + b + file + e + '\n')
@@ -1623,7 +1625,7 @@ class Parser(object):
     ###########################################################################
     def visit_ast(self, inst):
         # Parse markers for collecting lines of C++ code
-        if inst.data == 'cpp_code':
+        if inst.data == 'cpp':
             self.parse_extra_code(str(inst.children[0]), inst.children[1].strip())
         # Parse a statechart transition
         elif inst.data == 'transition':
