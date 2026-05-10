@@ -1,0 +1,8 @@
+@startuml
+'[brief] Smallest possible FSM: a single named state reachable from the initial pseudo-state and producing a final state on event.
+
+[*] -> Idle
+Idle -> Done : finish
+Done -> [*]
+
+@enduml

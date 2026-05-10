@@ -1,0 +1,12 @@
+@startuml
+'[brief] Internal-transition example: handling an event without leaving or re-entering the source state.
+
+'[code] private:
+'[code] int retries = 0;
+
+[*] -> Connected
+Connected : on ping / retries++
+Connected --> Disconnected : drop
+Disconnected --> Connected : recover
+
+@enduml

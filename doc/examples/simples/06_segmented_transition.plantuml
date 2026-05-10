@@ -1,0 +1,12 @@
+@startuml
+'[brief] Segmented transition simulated via two consecutive transitions. The intermediate state acts as a junction: when the trigger fires the FSM walks through both segments before settling.
+
+'[code] private:
+'[code] bool door_open = true;
+
+[*] -> Locked
+Locked --> Step1 : unlock [door_open] / door_open = false
+Step1 --> Unlocked : / door_open = true
+Unlocked --> Locked : lock
+
+@enduml
