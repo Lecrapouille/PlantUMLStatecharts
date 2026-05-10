@@ -1,0 +1,38 @@
+@startuml
+skin rose
+
+'[header]  #  define Disable false
+'[header]  #  define Enable true
+
+'[code] private:
+'[code]    bool LED_LKS;
+'[code]    bool LED_lane;
+'[code]    bool LED_steering;
+'[code]    bool servoing;
+
+'[init]    LED_LKS = LED_lane = LED_steering = servoing = Disable;
+
+[*] --> LKSModeOff
+
+LKSModeOff : comment / Line Keep System OFF
+LKSModeOn : comment / Line Keep System ON
+WaitDetect : comment / LKS is not detecting the lane
+DetectLane : comment / LKS is detecting crossing the lane
+FollowLane : comment / LKS is following the lane
+
+LKSModeOff --> LKSModeOn : btn_LKS \n--\n LED_LKS = Enable
+LKSModeOn --> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable
+LKSModeOn -> DetectLane : detect \n--\n LED_lane = Enable
+
+DetectLane --> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable; LED_lane = Disable
+DetectLane -> WaitDetect : not detect \n--\n LED_lane = Disable
+DetectLane --> FollowLane : set \n--\n LED_steering = Enable; servoing = Enable
+
+FollowLane --> WaitDetect : not detect \n--\n LED_lane = Disable; LED_steering = Disable; servoing = Disable
+FollowLane -> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable; LED_lane = Disable; LED_steering = Disable; servoing = Disable
+FollowLane -> DetectLane : cancel \n--\n LED_steering = Disable; servoing = Disable
+
+WaitDetect -> DetectLane : detect \n--\n LED_lane = Enable
+WaitDetect -> LKSModeOff : btn_LKS \n--\n LED_LKS = Disable
+
+@enduml

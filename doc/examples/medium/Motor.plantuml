@@ -1,0 +1,23 @@
+@startuml
+skin rose
+
+'[header] #define REFSPEED int
+'[code] REFSPEED m_reference_speed = 0;
+
+[*] --> Idle
+
+Idle : entry / printf("Motor is halted\\n")
+Idle : exit / printf("Motor is started\\n")
+Idle --> Start : setSpeed(refSpeed) [ refSpeed > 0 ] / m_reference_speed = refSpeed
+
+Start --> Stop : halt
+Start -> Spinning : setSpeed(refSpeed) [ refSpeed > 0 ] / m_reference_speed = refSpeed
+Stop <- Spinning : halt
+' FIXME not managed: double transition
+' Stop <- Spinning : setSpeed(refSpeed) [ refSpeed == 0 ] / m_reference_speed = 0
+' Stop <- Spinning : halt
+Idle <- Stop
+
+Spinning : on setSpeed(refSpeed) [ refSpeed >= 0 ]  / m_reference_speed = refSpeed
+
+@enduml

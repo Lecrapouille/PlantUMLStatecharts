@@ -1,0 +1,14 @@
+@startuml
+skin rose
+
+'[brief] Two same events 'e' but with different guards to transiti to different states.
+
+[*] -> A
+A -> B : e [x == 10]
+A --> C : e
+A --> D : [x > 10]
+
+'[init] x = 0;
+'[code] int x;
+
+@enduml

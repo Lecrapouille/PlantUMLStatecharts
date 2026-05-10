@@ -1,0 +1,16 @@
+@startuml
+'[brief] State exposing entry, do and exit actions. Verifies that the three callbacks are wired through the generated lambdas.
+
+'[code] private:
+'[code] int entries = 0;
+'[code] int exits = 0;
+
+[*] -> Standby
+
+Standby : entry / entries++
+Standby : exit / exits++
+Standby --> Running : start
+
+Running --> Standby : stop
+
+@enduml

@@ -1,0 +1,36 @@
+@startuml
+skin rose
+
+'[code]   void pairing_phone() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_off() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_blinking() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_glow() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void led_constant_glow() { LOGD("[ACTION %s]\n", __func__); }
+'[code]   void launch_home_screen() { LOGD("[ACTION %s]\n", __func__); }
+
+[*] --> EthernetBoxOff
+
+EthernetBoxOff --> WifiDiscoverable : wifi powered on
+EthernetBoxOff <-- WifiDiscoverable : wifi powered off
+EthernetBoxOff <-- WifiDisconnected : wifi powered off
+
+WifiDiscoverable --> WifiConnected : pairing successful
+WifiDiscoverable <-- WifiConnected : long button press /  pairing_phone()
+' WifiDiscoverable --> WifiDisconnected : Wifi failure [ pairing unsuccessful || auto connection failure || 120s lapse ]
+WifiDiscoverable --> WifiDisconnected : Wifi failure
+WifiDiscoverable <-- WifiDisconnected : long button press / pairing_phone()
+
+WifiConnected --> WifiDisconnected : phone Wifi disconnected
+
+
+EthernetBoxOff : comment / Not available for pairing Wifi
+EthernetBoxOff : entry / led_off()
+WifiDiscoverable : comment / Avaialble for pairing or automatic connection or manual connection
+WifiDiscoverable : entry / led_blinking()
+WifiConnected : comment / Connected to phone via Wifi
+WifiConnected : entry / led_constant_glow()
+WifiConnected : on short button press / launch_home_screen()
+WifiDisconnected : comment / No Wifi connected
+WifiDisconnected : entry / led_glow()
+
+@enduml

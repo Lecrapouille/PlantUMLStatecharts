@@ -1,0 +1,14 @@
+@startuml
+'[brief] Event carrying a typed parameter. Mirrors figure g4: the parameter value is stashed inside the FSM and reused by guards/actions.
+
+'[header] using SPEED = int;
+
+'[code] private:
+'[code] SPEED reference_speed = 0;
+
+[*] -> Idle
+Idle -> Running : setSpeed(speed) [ speed > 0 ] / reference_speed = speed
+Running -> Idle : halt
+Running : on setSpeed(speed) / reference_speed = speed
+
+@enduml

@@ -1,0 +1,92 @@
+// Lark grammar rules https://github.com/lark-parser/lark for parsing PlantUML statecharts
+// This file is based on the initial project:
+// https://github.com/thomedes/PlantUML-Lark-EBNF
+// https://stackoverflow.com/questions/65872693/how-can-i-split-a-rule-with-lark-ebnf
+// I have extended it for my personal usage.
+
+start: "@startuml" "\n" ( cpp | comment | skin | state_block | state_action | transition | note | ortho_block | "\n" )* "@enduml" (WS|"\n"*)
+
+// "skin" is a theme parameter: we skip it.
+skin: ("skin" | "hide") FREE_TEXT "\n"
+
+// The following rules do not belong to PlantUML syntax. We absue of the PlantUML
+// single-line comment to add extra commands helping to generate C++ code:
+// "[header]" for adding code in the header part of the generated file.
+// "[footer]" for adding code in the footer part of the generated file.
+// "[brief]" for adding a comment concerning the current state.
+// "[param]" for adding C++ parameters to the state machine C++ constructor definition.
+// "[cons]" for init the C++ constructor argument before its code.
+// "[init]" for add C++ code called by the constructor.
+// "[code]" for adding C++ member variables or member functions in the class definition.
+// "[test]" for adding C++ unit test code.
+cpp: "'" CPP_COMMAND /[ \t].+/ "\n"
+CPP_COMMAND: "[header]" | "[footer]" | "[param]" | "[cons]" | "[init]" | "[code]" | "[test]"
+brief: "'" "[brief]" /[ \t].+/ "\n"
+
+// Single-line comment: we skip it.
+comment: "'" FREE_TEXT "\n"
+
+// Hierarchic states i.e. "state FooBar {"
+state_block: "state" STATE "{" "\n" ( brief | comment | state_block | state_action | transition | note | ortho_block | "\n" )* "}" "\n"
+
+// Concurrent states.
+ortho_block : ( comment | state_block | state_action | transition )* ( "--" | "||" ) "\n" ( comment | state_block | state_action | transition )*
+
+// Note. Currently we skip it. TODO but is this can help us adding C++ code ?
+note: "note" side "of" STATE "\n" /.+/ "\n" "end" "note" "\n"
+?side: "left" -> left | "right" -> right
+
+// State action/activity.
+?state_action: state_entry | state_exit | state_event | state_activity | state_comment
+
+// Actions when entering or leaving the state. I also added unofficial alternative names.
+state_entry: STATE ":" ("entry" | "entering") action "\n"
+state_exit: STATE ":" ("exit" | "leaving") action "\n"
+
+// Internal event.
+state_event: STATE ":" ("on" | "event") event guard? action? "\n"
+
+// Activity (long action).
+state_activity: STATE ":" ("do" | "activity") action "\n"
+
+// The following rule is not defined by the UML standard but help generating a
+// comment concerning the state. FIXME not a bug but action? should be named
+// comment? but the rule as already used for PlantUML single-line comment.
+state_comment: STATE ":" "comment" action? "\n"
+
+// Transition: state-source -> state-destination : event-name [guard] / actions
+// Where event-name, guard and actions are optional i.e.
+// Foo --> Bar : kaboom [count_kabooms < 10] / count_kabooms++
+transition: STATE ARROW STATE (":" event? guard? action?)? "\n"
+
+// Event. The syntax is flexible. Either a single world or several words separated
+// with spaces. If the event has paramater you add them wrapped with parenthesis.
+// In all cases concatenate words shall form a valid C++ function name i.e.
+// "foo bar toto(param1, param2)" will be transformed into "fooBarToto(param1, param2)".
+event: CNAME+ (/\(.*\)/)?
+
+// Guard. The syntax is "[ boolean C++ logic "]. The guard shall form a valid C++ code.
+guard : /\[.+\]/
+
+// Actions. The first syntax (in UML standard) is "/ C++ logics"
+// The second syntax (in State-Transition Diagrams (STD) standard) is: "\n--\n C++ logics".
+// C++ logics shall be separated by ';' The last ';' is optional (it will be added).
+?action: uml_action | std_action
+uml_action: /\/.*/
+std_action: /\\n--\\n.*/
+
+// State names
+STATE: "[*]" | CNAME
+
+// Transition direction
+ARROW: ("->" | "-->" | "<-" | "<--")
+
+// Any consecutive chars
+FREE_TEXT: /.+/
+
+//
+%import common.ESCAPED_STRING
+%import common.CNAME
+%import common.WS_INLINE
+WS: /[ \t\f\r]/+
+%ignore WS

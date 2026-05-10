@@ -1,0 +1,11 @@
+@startuml
+'[brief] Transition with both a guard and an action. Mirrors figure g2 of the README.
+
+'[code] private:
+'[code] int counter = 0;
+
+[*] -> Closed
+Closed -> Opened : push [counter < 3] / counter++
+Opened -> Closed : push
+
+@enduml

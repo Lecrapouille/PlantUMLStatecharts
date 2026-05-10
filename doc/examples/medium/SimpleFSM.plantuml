@@ -1,0 +1,55 @@
+@startuml
+skin rose
+
+'[brief] Show accepted syntax for generate state machine.
+
+' This is a PlantUML single line commentary as well as the next lines
+' but they are interpreter by our translator for adding C++ code in
+' the generated code.
+
+'[header] // Add here all your includes
+'[header] #include <iostream>
+'[header] #define NAME "[PLANTUML CODE]"
+'[header] // and your multi-lines C++ header code.
+
+'[init] // Add here your code for the contructor and reset()
+'[init] std::cout << NAME << "[" << __func__ << "] Example of init code" << std::endl;
+
+'[code] // Add here your code definining methods and member variables
+'[code] private:
+'[code]   void action1() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action3() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action4() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action5() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action6() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action7() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action8() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action9() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]   void action10() { LOGD(NAME"[ACTION %s]\n", __func__); }
+'[code]
+'[code] private:
+'[code]   bool guard1 = true;
+'[code]   bool guard3 = true;
+'[code]   bool guard6 = true;
+
+'[footer] // Add here your multi-lines C++ footer code.
+
+[*] -> State1
+
+State1 --> State2 : event1 [ guard1 ] / action1()
+State1 <-- State2 : event2
+State2 -> [*] : event6
+
+State1 : comment / This is the state 1
+State1 : entry / action7()
+State1 : exit / action8()
+State1 : on event3 [ guard3 ] / action3()
+' FIXME not managed State1 : on event4 / action4()
+
+State2 : comment / This is the state 2
+State2 : entry / action9()
+State2 : exit / action10()
+State2 : on event5 / action5()
+' FIXME not managed State2 : on event6 [ guard6 ] / action6()
+
+@enduml
